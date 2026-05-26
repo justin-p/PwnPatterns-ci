@@ -57,6 +57,23 @@ class CheckReport:
     def passed(self) -> bool:
         return all(s.status != StepStatus.FAIL for s in self.steps)
 
+    @property
+    def failed_steps(self) -> list[StepResult]:
+        return [s for s in self.steps if s.status == StepStatus.FAIL]
+
+    def failure_summary(self) -> str | None:
+        """Short description of failed pipeline steps (for UI when findings are empty)."""
+        failed = self.failed_steps
+        if not failed:
+            return None
+        parts: list[str] = []
+        for step in failed:
+            if step.detail:
+                parts.append(f"{step.name} ({step.detail})")
+            else:
+                parts.append(step.name)
+        return ", ".join(parts)
+
     def all_findings(self) -> list[Finding]:
         out: list[Finding] = []
         for ff in self.files:

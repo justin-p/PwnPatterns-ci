@@ -399,6 +399,115 @@ def _prose_failed(ctx: RepoContext) -> bool:
     return False
 
 
+_PROSE_TOOLS = ("vale", "typos", "rumdl", "harper", "languagetool")
+
+
+def _stderr_excerpt(ctx: RepoContext, tool: str, *, limit: int = 160) -> str:
+    err = ctx.lint_log_dir / f"{tool}.stderr"
+    if not err.is_file():
+        return ""
+    text = err.read_text(encoding="utf-8").strip()
+    if not text:
+        return ""
+    return text.splitlines()[0].strip()[:limit]
+
+
+def _synthetic_tool_finding(
+    ctx: RepoContext,
+    *,
+    tool: str,
+    path: str,
+    exit_code: str,
+) -> Finding:
+    hint = _stderr_excerpt(ctx, tool)
+    message = f"{tool} exited {exit_code}"
+    if hint:
+        message = f"{message}: {hint}"
+    else:
+        try:
+            log_hint = ctx.lint_log_dir.relative_to(ctx.repo_root)
+        except ValueError:
+            log_hint = ctx.lint_log_dir
+        message = f"{message} (see {log_hint}/{tool}.stderr)"
+    return Finding(
+        tool=tool,
+        path=path,
+        line=1,
+        column=1,
+        severity="error",
+        message=message,
+        rule=f"{tool}.exit",
+    )
+
+
+def _findings_for_unreported_tool_failures(
+    ctx: RepoContext,
+    paths: list[str],
+    findings: list[Finding],
+) -> list[Finding]:
+    """Tools may exit non-zero without JSON the parsers understand — surface that in the UI."""
+    tools_with_findings = {f.tool for f in findings}
+    anchor = paths[0] if paths else "docs/"
+    extra: list[Finding] = []
+
+    for tool in _PROSE_TOOLS:
+        exit_file = ctx.lint_log_dir / f"{tool}.exit"
+        if not exit_file.is_file():
+            continue
+        code = exit_file.read_text(encoding="utf-8").strip()
+        if code == "0" or tool in tools_with_findings:
+            continue
+        extra.append(
+            _synthetic_tool_finding(ctx, tool=tool, path=anchor, exit_code=code)
+        )
+
+    meta_exit = ctx.lint_log_dir / "metadata.exit"
+    if (
+        meta_exit.is_file()
+        and meta_exit.read_text(encoding="utf-8").strip() != "0"
+        and "metadata" not in tools_with_findings
+    ):
+        code = meta_exit.read_text(encoding="utf-8").strip()
+        err = ctx.lint_log_dir / "metadata.stderr"
+        hint = ""
+        if err.is_file():
+            hint = err.read_text(encoding="utf-8").strip().splitlines()
+            hint = hint[0][:160] if hint else ""
+        message = f"metadata validation exited {code}"
+        if hint:
+            message = f"{message}: {hint}"
+        extra.append(
+            Finding(
+                tool="metadata",
+                path=anchor,
+                line=1,
+                column=1,
+                severity="error",
+                message=message,
+                rule="metadata.exit",
+            )
+        )
+
+    if "lychee" not in tools_with_findings:
+        log = ctx.lint_log_dir / "lychee-offline.log"
+        if log.is_file():
+            tail = log.read_text(encoding="utf-8").strip().splitlines()
+            if tail and "error" in tail[-1].lower():
+                extra.append(
+                    Finding(
+                        tool="lychee",
+                        path=anchor,
+                        line=1,
+                        column=1,
+                        severity="error",
+                        message=tail[-1][:200],
+                        rule="lychee.offline",
+                    )
+                )
+
+    return extra
+
+
 def run_check(
     ctx: RepoContext,
     opts: CheckOptions,
@@ -494,13 +603,10 @@ def run_check(
 
     _progress(on_progress, "Collecting findings…")
     findings = parse_all_lint_logs(ctx.lint_log_dir, paths)
-    if _prose_failed(ctx) or any(
-        s.name == "lychee (offline)" and s.status == StepStatus.FAIL for s in report.steps
-    ):
-        pass
     lychee_report = ctx.repo_root / "lychee" / "report-offline.json"
     if lychee_report.is_file() and not opts.skip_lychee:
         findings.extend(lychee.parse_report(lychee_report))
+    findings.extend(_findings_for_unreported_tool_failures(ctx, paths, findings))
 
     report.files = group_findings_by_file(findings)
     return report

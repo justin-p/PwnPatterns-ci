@@ -839,10 +839,22 @@ class CheckScreen(Screen):
                 f"{len(self._report.files)} file(s) (non-blocking)"
             )
         else:
-            summary = (
-                f"[bold red]✗ FAIL[/] — {total_findings} finding(s) in "
-                f"{len(self._report.files)} file(s)"
-            )
+            step_note = self._report.failure_summary()
+            if total_findings == 0 and step_note:
+                summary = (
+                    "[bold red]✗ FAIL[/] — 0 parsed finding(s); "
+                    f"failed step(s): {step_note}"
+                )
+            elif step_note:
+                summary = (
+                    f"[bold red]✗ FAIL[/] — {total_findings} finding(s) in "
+                    f"{len(self._report.files)} file(s) · {step_note}"
+                )
+            else:
+                summary = (
+                    f"[bold red]✗ FAIL[/] — {total_findings} finding(s) in "
+                    f"{len(self._report.files)} file(s)"
+                )
         self.query_one("#summary", Static).update(summary)
 
     def _apply_file_rescan(self, path: str, findings: list[Finding]) -> None:
