@@ -125,9 +125,8 @@ jobs:
 
       - name: Run linters in parallel
         if: steps.targets.outputs.skip != 'true'
-        env:
-          DOC_PATHS: ${{ steps.targets.outputs.paths }}
         run: |
+          export DOC_PATHS="$(bash "${DOCS_QUALITY_DIR}/automation/bin/load-doc-paths.sh" "${{ steps.targets.outputs.paths }}")"
           uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
             pwnpatterns-ci ci lint-prose lint-logs
 
@@ -155,10 +154,9 @@ jobs:
         continue-on-error: true
         env:
           REPO_ROOT: ${{ github.workspace }}
-          DOC_PATHS: ${{ steps.targets.outputs.paths }}
         run: |
           set -euo pipefail
-          mapfile -t paths < <(printf '%s\n' "${DOC_PATHS}")
+          mapfile -t paths < <(bash "${DOCS_QUALITY_DIR}/automation/bin/load-doc-paths.sh" "${{ steps.targets.outputs.paths }}")
           if [ "${{ steps.targets.outputs.scan_mode }}" = "all" ]; then
             mapfile -t paths < <(find docs -type f -name '*.md' | sort)
           fi
