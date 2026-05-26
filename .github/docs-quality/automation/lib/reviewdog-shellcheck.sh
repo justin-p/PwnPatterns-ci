@@ -9,6 +9,6 @@ reviewdog_shellcheck_gcc() {
   if [ ! -s "${log_file}" ]; then
     return 0
   fi
-  # shellcheck -f gcc: path:line:col: severity: message [SCxxxx]
+  # reviewdog -efm matches shellcheck -f gcc lines: path:line:col: severity: message
   reviewdog -efm='%f:%l:%c: %t: %m' -name="${name}" "$@" <"${log_file}" || true
 }

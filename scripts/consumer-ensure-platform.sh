@@ -3,7 +3,8 @@
 # Bootstrap: clone platform if missing, then delegate to .github/pwnpatterns-ci/scripts/ensure-platform.sh.
 set -euo pipefail
 
-export REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export REPO_ROOT
 DEST="${REPO_ROOT}/.github/pwnpatterns-ci"
 REF_FILE="${REPO_ROOT}/.github/platform.ref"
 REPO="${PWNPATTERNS_CI_REPO:-ocd-nl/PwnPatterns-ci}"

@@ -17,7 +17,8 @@ cd "${REPO_ROOT}"
 
 # shellcheck source=../docs-quality/automation/lib/env.sh
 if [ -f "${REPO_ROOT}/.github/pwnpatterns-ci/.github/docs-quality/automation/lib/env.sh" ]; then
-  export DOCS_QUALITY_DIR="$(cd "${REPO_ROOT}/.github/pwnpatterns-ci/.github/docs-quality" && pwd)"
+  DOCS_QUALITY_DIR="$(cd "${REPO_ROOT}/.github/pwnpatterns-ci/.github/docs-quality" && pwd)"
+  export DOCS_QUALITY_DIR
   # shellcheck source=/dev/null
   source "${DOCS_QUALITY_DIR}/automation/lib/env.sh"
 elif [ -f "${REPO_ROOT}/.github/docs-quality/automation/lib/env.sh" ]; then

@@ -271,7 +271,7 @@ ci_actionlint_job() {
     return 0
   fi
 
-  local shellcheck_rc="${REPO_ROOT}/.github/docs-quality/config/shellcheckrc"
+  local shellcheck_rc="${DOCS_QUALITY_DIR}/config/shellcheckrc"
   local -a shellcheck_args=(-f gcc -x)
   if [ -f "${shellcheck_rc}" ]; then
     shellcheck_args+=(--rcfile="${shellcheck_rc}")
