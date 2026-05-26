@@ -328,10 +328,23 @@ title: "t"
 ---
 Nederlands.
 EOF
+  # Isolated routing config (do not use consumer language-tools.yml; repos may disable LT).
+  cat >"${tmp}/language-tools.yml" <<'EOF'
+default_language: en
+fallback_tool: languagetool
+grammar_tools:
+  en: harper
+  nl: languagetool
+languagetool_codes:
+  en: en-US
+  nl: nl
+languagetool_enabled: true
+grammar_from_frontmatter: true
+EOF
   uv_run_tool "${DOCS_QUALITY_DIR}/tools/grammar-routing" \
     python route_grammar_paths.py \
     --repo-root "${tmp}" \
-    --config "${REPO_ROOT}/.github/docs-quality/config/language-tools.yml" \
+    --config "${tmp}/language-tools.yml" \
     --log-dir "${log_dir}" \
     docs/en.md docs/nl.md
   if ! grep -qx 'docs/en.md' "${log_dir}/grammar-harper-paths.lst"; then
