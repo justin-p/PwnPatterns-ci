@@ -156,6 +156,7 @@ jobs:
           REPO_ROOT: ${{ github.workspace }}
         run: |
           set -euo pipefail
+          mkdir -p lint-logs
           mapfile -t paths < <(bash "${DOCS_QUALITY_DIR}/automation/bin/load-doc-paths.sh" "${{ steps.targets.outputs.paths }}")
           if [ "${{ steps.targets.outputs.scan_mode }}" = "all" ]; then
             mapfile -t paths < <(find docs -type f -name '*.md' | sort)
