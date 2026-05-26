@@ -23,7 +23,7 @@ HOME_ENTRIES: list[MenuEntry] = [
     MenuEntry(
         "changed",
         "Check Changed",
-        "Lint files changed vs main",
+        "Lint branch + local doc edits vs main",
         "warning",
         "2",
     ),

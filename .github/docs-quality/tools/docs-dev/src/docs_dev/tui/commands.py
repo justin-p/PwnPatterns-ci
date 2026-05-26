@@ -66,7 +66,7 @@ def iter_docs_dev_commands(app: App, screen: Screen) -> Iterable[SystemCommand]:
         else:
             yield SystemCommand(
                 "Check Changed",
-                "Lint files changed vs main",
+                "Lint branch + local doc edits vs main",
                 app.action_nav_check_changed,
             )
         yield SystemCommand("Home", "Return to the main menu", app.action_nav_home)
@@ -80,7 +80,7 @@ def iter_docs_dev_commands(app: App, screen: Screen) -> Iterable[SystemCommand]:
     yield SystemCommand("Setup", "Install linters and prek hooks", app.action_nav_setup)
     yield SystemCommand(
         "Check Changed",
-        "Lint files changed vs main",
+        "Lint branch + local doc edits vs main",
         app.action_nav_check_changed,
     )
     yield SystemCommand("Check All", "Lint all documentation", app.action_nav_check_all)

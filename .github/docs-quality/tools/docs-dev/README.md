@@ -33,7 +33,7 @@ The shell wrapper accepts commands (`check`, `fix`, `setup`, `web`) and global f
 | `--format json` | Machine-readable report (`schema_version: 1`) |
 | `--format plain` | One finding per line |
 | `--fix` | typos, rumdl, prek fixers, shfmt; then re-check |
-| `--changed` | Only `docs/**/*.md` changed vs `origin/main` |
+| `--changed` | `docs/**/*.md` changed on the branch vs `origin/main` plus local edits |
 | `--skip-lychee` | Skip offline lychee |
 | `--skip-actionlint` | Skip workflow lint |
 

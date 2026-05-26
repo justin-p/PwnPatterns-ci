@@ -91,7 +91,11 @@ def setup_cmd(
 def main(
     ctx: typer.Context,
     changed: Annotated[
-        bool, typer.Option("--changed", help="Lint docs changed vs origin/main")
+        bool,
+        typer.Option(
+            "--changed",
+            help="Lint docs changed on the branch vs origin/main plus local edits",
+        ),
     ] = False,
     fix: Annotated[
         bool, typer.Option("--fix", help="Apply typos/rumdl/shfmt fixes, then re-check")
