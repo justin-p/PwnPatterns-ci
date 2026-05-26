@@ -24,7 +24,19 @@ include "textlint-message";
         },
         suggestions: (
           (.fix.text // "") as $s
-          | if $s != "" then [{text: $s}] else [] end
+          | if $s != "" then [{
+              range: {
+                start: {
+                  line: (.line // 1),
+                  column: (.column // 1)
+                },
+                end: {
+                  line: (.line // 1),
+                  column: ((.column // 1) + (((.fix.range[1] // .fix.range[0] // .column // 1) - (.fix.range[0] // .column // 1)) // 1))
+                }
+              },
+              text: $s
+            }] else [] end
         ),
         severity: "ERROR"
       }
