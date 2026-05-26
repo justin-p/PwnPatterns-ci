@@ -1,0 +1,147 @@
+# Reusable PR/push link check (platform: ocd-nl/PwnPatterns-ci).
+name: Documentation quality (lychee)
+
+on:
+  workflow_call:
+    inputs:
+      platform_ref:
+        description: ocd-nl/PwnPatterns-ci commit SHA (must match workflow uses pin)
+        required: true
+        type: string
+    secrets:
+      PWNPATTERNS_CI_CHECKOUT_TOKEN:
+        description: Optional PAT for checkout when GITHUB_TOKEN cannot read the private platform repo
+        required: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  lychee:
+    name: Check links in docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Checkout platform
+        uses: ocd-nl/PwnPatterns-ci/.github/actions/checkout-platform@64b42f452bb4b97147f1aed752b719f6dd0ef835
+        with:
+          platform_ref: ${{ inputs.platform_ref }}
+          token: ${{ secrets.PWNPATTERNS_CI_CHECKOUT_TOKEN }}
+
+      - name: Determine lychee targets
+        id: targets
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            pr_range="${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}"
+            mapfile -t files < <(
+              git diff --name-only --diff-filter=ACMR "${pr_range}" -- docs/ \
+                | grep -E "\.md\$" || true
+            )
+            if [ "${#files[@]}" -eq 0 ]; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            {
+              echo 'paths<<EOF'
+              printf '%s\n' "${files[@]}"
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            {
+              echo 'paths<<EOF'
+              echo './docs/**/*.md'
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare lychee check args
+        if: steps.targets.outputs.skip != 'true'
+        id: lychee_check_args
+        env:
+          DOC_PATHS: ${{ steps.targets.outputs.paths }}
+        run: |
+          set -euo pipefail
+          mapfile -t paths < <(printf '%s\n' "${DOC_PATHS}")
+          {
+            echo 'args<<EOF'
+            echo '--config .lychee.toml'
+            echo '--max-cache-age 1d'
+            printf '%s\n' "${paths[@]}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Restore lychee cache
+        if: steps.targets.outputs.skip != 'true'
+        id: restore-cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: .lycheecache
+          key: cache-lychee-v2-${{ github.sha }}
+          restore-keys: cache-lychee-v2-
+
+      - name: Run lychee
+        id: lychee
+        if: steps.targets.outputs.skip != 'true'
+        continue-on-error: true
+        uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2.8.0
+        with:
+          fail: false
+          failIfEmpty: true
+          format: json
+          output: lychee/report.json
+          checkbox: false
+          token: ${{ github.token }}
+          jobSummary: false
+          args: ${{ steps.lychee_check_args.outputs.args }}
+
+      - name: Filter datacenter 403 on known hosts
+        id: filter_403
+        if: steps.targets.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          hosts_json="$(grep -vE "^\s*(#|\$)" .github/lychee/config/ci-403-hosts.txt | jq -Rsc 'split("\n") | map(select(length > 0))')"
+          tmp="$(mktemp)"
+          jq -f .github/pwnpatterns-ci/.github/lychee/automation/filters/filter-datacenter-403.jq \
+            --slurpfile hosts <(echo "$hosts_json") \
+            lychee/report.json >"$tmp"
+          mv "$tmp" lychee/report.json
+          errors="$(jq '.errors // 0' lychee/report.json)"
+          suppressed="$(jq '.datacenter_403_suppressed // 0' lychee/report.json)"
+          echo "Filtered datacenter 403: suppressed=${suppressed}, remaining errors=${errors}"
+          if [[ "$errors" -eq 0 ]]; then echo "exit_code=0" >> "$GITHUB_OUTPUT"; else echo "exit_code=1" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Setup reviewdog
+        if: steps.targets.outputs.skip != 'true'
+        uses: reviewdog/action-setup@d8a7baabd7f3e8544ee4dbde3ee41d0011c3a93f # v1.5.0
+
+      - name: Run reviewdog
+        if: steps.targets.outputs.skip != 'true'
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          jq -r -L .github/pwnpatterns-ci/.github/docs-quality/automation/filters/lib \
+            -f .github/pwnpatterns-ci/.github/lychee/automation/filters/to-rdjsonl.jq lychee/report.json \
+            | reviewdog -f=rdjsonl -name=lychee \
+              -reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}" \
+              -fail-level=error -filter-mode=file
+
+      - name: Save lychee cache
+        if: always() && steps.targets.outputs.skip != 'true'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: .lycheecache
+          key: ${{ steps.restore-cache.outputs.cache-primary-key }}
+
+      - name: Fail on broken links
+        if: steps.targets.outputs.skip != 'true' && steps.filter_403.outputs.exit_code != '0'
+        run: exit 1
