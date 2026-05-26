@@ -1,0 +1,94 @@
+# Reusable actionlint + consumer shell lint (platform: ocd-nl/PwnPatterns-ci).
+name: Documentation quality (actionlint)
+
+on:
+  workflow_call:
+    inputs:
+      platform_ref:
+        description: ocd-nl/PwnPatterns-ci commit SHA (must match workflow uses pin)
+        required: true
+        type: string
+    secrets:
+      PWNPATTERNS_CI_CHECKOUT_TOKEN:
+        description: Optional PAT for checkout when GITHUB_TOKEN cannot read the private platform repo
+        required: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  actionlint:
+    name: GitHub Actions and shell linting
+    runs-on: ubuntu-latest
+    env:
+      DOCS_QUALITY_DIR: ${{ github.workspace }}/.github/pwnpatterns-ci/.github/docs-quality
+      CONSUMER_CONFIG_DIR: ${{ github.workspace }}/.github/docs-quality/config
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Checkout platform
+        uses: ocd-nl/PwnPatterns-ci/.github/actions/checkout-platform@958530184e7b03ce01fd6a5e960ed2139ea7c29f
+        with:
+          platform_ref: ${{ inputs.platform_ref }}
+          token: ${{ secrets.PWNPATTERNS_CI_CHECKOUT_TOKEN }}
+
+      - name: Load docs-quality manifest
+        run: |
+          grep -vE '^\s*(#|$)' "${DOCS_QUALITY_DIR}/config/manifest.env" >> "${GITHUB_ENV}"
+
+      - name: Install shell linters
+        run: bash "${DOCS_QUALITY_DIR}/automation/install/shell-linters.sh"
+
+      - uses: reviewdog/action-setup@d8a7baabd7f3e8544ee4dbde3ee41d0011c3a93f # v1.5.0
+
+      - name: Report shellcheck (reviewdog)
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p lint-logs
+          mapfile -t scripts < <(
+            find .github -type f -name '*.sh' ! -path './.github/pwnpatterns-ci/*' 2>/dev/null | sort
+          )
+          if [ "${#scripts[@]}" -eq 0 ]; then
+            exit 0
+          fi
+          shellcheck_rc="${CONSUMER_CONFIG_DIR}/shellcheckrc"
+          shellcheck_args=(-f gcc -x)
+          if [ -f "${shellcheck_rc}" ]; then
+            shellcheck_args+=(--rcfile="${shellcheck_rc}")
+          fi
+          set +e
+          shellcheck "${shellcheck_args[@]}" "${scripts[@]}" >lint-logs/shellcheck.txt 2>lint-logs/shellcheck.stderr
+          echo "$?" >lint-logs/shellcheck.exit
+          set -e
+          if [ -s lint-logs/shellcheck.txt ]; then
+            reviewdog -f=shellcheck -name=shellcheck \
+              -reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}" \
+              -fail-level=error -filter-mode=file <lint-logs/shellcheck.txt || true
+          fi
+
+      - name: Check shfmt
+        run: |
+          mapfile -t scripts < <(
+            find .github -type f -name '*.sh' ! -path './.github/pwnpatterns-ci/*' 2>/dev/null | sort
+          )
+          if [ "${#scripts[@]}" -eq 0 ]; then
+            exit 0
+          fi
+          shfmt -d -ln bash -i 2 -ci "${scripts[@]}"
+
+      - name: Fail on shellcheck
+        run: |
+          if [ -f lint-logs/shellcheck.exit ] && [ "$(cat lint-logs/shellcheck.exit)" -ne 0 ]; then
+            cat lint-logs/shellcheck.stderr 2>/dev/null || true
+            exit 1
+          fi
+
+      - uses: reviewdog/action-actionlint@6fb7acc99f4a1008869fa8a0f09cfca740837d9d # v1.72.0
+        with:
+          fail_level: error
+          filter_mode: file
+          reporter: ${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}
