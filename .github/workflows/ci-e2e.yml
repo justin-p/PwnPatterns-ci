@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       platform_ref:
-        description: ocd-nl/pwnpatterns-ci commit SHA
+        description: ocd-nl/PwnPatterns-ci commit SHA
         required: true
         type: string
     secrets:
@@ -28,7 +28,7 @@ jobs:
           fetch-depth: 0
 
       - name: Checkout platform
-        uses: ocd-nl/pwnpatterns-ci/.github/actions/checkout-platform@196ce152513d4ce1835c474c3322727636c78909
+        uses: ocd-nl/PwnPatterns-ci/.github/actions/checkout-platform@86758356f7b37c83b9bff0434659bebe73d18611
         with:
           platform_ref: ${{ inputs.platform_ref }}
           token: ${{ secrets.PWNPATTERNS_CI_CHECKOUT_TOKEN }}
