@@ -154,6 +154,7 @@ jobs:
         if: steps.targets.outputs.skip != 'true'
         continue-on-error: true
         env:
+          REPO_ROOT: ${{ github.workspace }}
           DOC_PATHS: ${{ steps.targets.outputs.paths }}
         run: |
           set -euo pipefail
