@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fast offline smoke tests for jq filters, sync-allowlists, and reviewdog local reporter.  a
+# Fast offline smoke tests for jq filters, sync-allowlists, and reviewdog local reporter.
 # shellcheck disable=SC2015
 set -euo pipefail
 
@@ -247,6 +247,7 @@ test_verify_metadata_rdjsonl() {
     return 0
   fi
   local doc="${REPO_ROOT}/docs/.ci-e2e-metadata-invalid.md"
+  mkdir -p "$(dirname "${doc}")"
   cp "${FIXTURES}/metadata-invalid.md" "${doc}"
   trap 'rm -f "${doc}"' RETURN
   local out
