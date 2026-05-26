@@ -58,7 +58,7 @@ jobs:
             exit 0
           fi
           shellcheck_rc="${CONSUMER_CONFIG_DIR}/shellcheckrc"
-          shellcheck_args=(-f gcc -x)
+          shellcheck_args=(-f checkstyle -x)
           if [ -f "${shellcheck_rc}" ]; then
             shellcheck_args+=(--rcfile="${shellcheck_rc}")
           fi
@@ -69,7 +69,7 @@ jobs:
           if [ -s lint-logs/shellcheck.txt ]; then
             # shellcheck source=/dev/null
             source "${DOCS_QUALITY_DIR}/automation/lib/reviewdog-shellcheck.sh"
-            reviewdog_shellcheck_gcc lint-logs/shellcheck.txt shellcheck \
+            reviewdog_shellcheck_checkstyle lint-logs/shellcheck.txt shellcheck \
               -reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}" \
               -fail-level=any -filter-mode=nofilter
           fi

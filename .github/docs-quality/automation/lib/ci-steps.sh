@@ -272,7 +272,7 @@ ci_actionlint_job() {
   fi
 
   local shellcheck_rc="${DOCS_QUALITY_DIR}/config/shellcheckrc"
-  local -a shellcheck_args=(-f gcc -x)
+  local -a shellcheck_args=(-f checkstyle -x)
   if [ -f "${shellcheck_rc}" ]; then
     shellcheck_args+=(--rcfile="${shellcheck_rc}")
   fi
@@ -289,7 +289,7 @@ ci_actionlint_job() {
   if [ -s "${CI_LINT_LOG_DIR}/shellcheck.txt" ]; then
     # shellcheck source=reviewdog-shellcheck.sh
     source "${AUTOMATION_DIR}/lib/reviewdog-shellcheck.sh"
-    reviewdog_shellcheck_gcc "${CI_LINT_LOG_DIR}/shellcheck.txt" shellcheck \
+    reviewdog_shellcheck_checkstyle "${CI_LINT_LOG_DIR}/shellcheck.txt" shellcheck \
       -reporter="${reporter}" -fail-level="${fail_level}" -filter-mode="${filter_mode}"
   fi
 
