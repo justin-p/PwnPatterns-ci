@@ -49,16 +49,26 @@ class WorkerScreen(Screen):
 
     def _work(self) -> int:
         log = self.query_one("#log", RichLog)
+        lines_written = 0
 
         def on_line(msg: str) -> None:
+            nonlocal lines_written
             text = sanitize_log_line(msg)
             if not text:
                 return
             for line in text.splitlines():
                 if line:
+                    lines_written += 1
                     self.app.call_from_thread(log.write, line)
 
-        return self._runner(on_line)
+        code = self._runner(on_line)
+        if code != 0 and lines_written == 0:
+            self.app.call_from_thread(
+                log.write,
+                "Command failed before producing output. "
+                "Check scripts/ensure-platform.sh and .github/platform.ref.",
+            )
+        return code
 
     def on_worker_state_changed(self, event) -> None:
         worker = getattr(self, "_worker", None)
@@ -79,8 +89,14 @@ class WorkerScreen(Screen):
             )
         else:
             status.add_class("-fail")
+            log = self.query_one("#log", RichLog)
+            hint = (
+                " See log below for details."
+                if log.lines
+                else " No log output was captured."
+            )
             status.update(
-                f"[bold red]✗[/] [bold]{self.command}[/] — exited with code {code}"
+                f"[bold red]✗[/] [bold]{self.command}[/] — exited with code {code}.{hint}"
             )
 
     def action_back(self) -> None:

@@ -55,9 +55,14 @@ def _mock_heavy_runners(monkeypatch: pytest.MonkeyPatch) -> None:
         "docs_dev.tui.screens.tools_screen.maintenance.run_checksums",
         lambda ctx, on_line: _noop_line(on_line),
     )
+    def _mock_e2e(ctx, extra, *, on_line=None):
+        if on_line:
+            on_line("e2e (mock)")
+        return 0
+
     monkeypatch.setattr(
-        "docs_dev.runners.e2e.run_e2e",
-        lambda ctx, extra: 0,
+        "docs_dev.tui.screens.tools_screen.e2e.run_e2e",
+        _mock_e2e,
     )
 
     def _mock_check(ctx, opts):

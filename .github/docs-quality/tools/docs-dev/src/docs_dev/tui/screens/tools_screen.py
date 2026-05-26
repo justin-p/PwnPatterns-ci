@@ -111,7 +111,10 @@ class ToolsScreen(Screen):
             return
         if cmd == "e2e":
             self.app.push_screen(
-                WorkerScreen("e2e", lambda on: e2e.run_e2e(ctx, []))
+                WorkerScreen(
+                    "e2e",
+                    lambda on: e2e.run_e2e(ctx, [], on_line=on),
+                )
             )
             return
 
