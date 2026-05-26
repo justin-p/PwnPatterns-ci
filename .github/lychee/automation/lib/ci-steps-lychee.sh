@@ -10,7 +10,7 @@ export CI_STEPS_LYCHEE_LOADED=1
 # shellcheck source=env.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/env.sh"
 
-LYCHEE_VERSION="${LYCHEE_VERSION:-0.24.2}"
+LYCHEE_VERSION="${LYCHEE_VERSION:-0.18.1}"
 LYCHEE_INSTALL_DIR="${LYCHEE_INSTALL_DIR:-${DOC_LINT_INSTALL_DIR:-/tmp}}"
 
 _lychee_runnable() {
@@ -46,6 +46,10 @@ lychee_install_cli() {
   install -m 0755 "${bin}" "${LYCHEE_INSTALL_DIR}/lychee"
   rm -rf "${tmp}"
   export PATH="${LYCHEE_INSTALL_DIR}:${PATH}"
+  if ! _lychee_runnable "${LYCHEE_INSTALL_DIR}/lychee"; then
+    echo "lychee: installed binary is not runnable on this host (check glibc)" >&2
+    return 1
+  fi
 }
 
 ci_lychee_hosts_json() {

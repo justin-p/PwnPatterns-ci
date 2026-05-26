@@ -46,7 +46,7 @@ def test_from_env_platform_layout(tmp_path: Path, monkeypatch) -> None:
         "SHELLCHECK_VERSION=0.11.0\n"
         "SHFMT_VERSION=3.12.0\n"
         "REVIEWDOG_VERSION=0.20.3\n"
-        "LYCHEE_VERSION=0.24.2\n"
+        "LYCHEE_VERSION=0.18.1\n"
         "ACTIONLINT_VERSION=1.7.12\n",
         encoding="utf-8",
     )
