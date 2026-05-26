@@ -1,16 +1,16 @@
 # Legacy composite for consumers that still pin checkout-platform@SHA.
 # Reusable workflows in this repo use inline actions/checkout instead (see .github/workflows/*.yml).
-# Check out ocd-nl/PwnPatterns-ci at a pinned SHA into .github/pwnpatterns-ci/
+# Check out justin-p/PwnPatterns-ci at a pinned SHA into .github/pwnpatterns-ci/
 name: Checkout pwnpatterns-ci platform
 description: Clone the private platform repository at platform_ref into the consumer workspace.
 
 inputs:
   platform_ref:
-    description: Full commit SHA on ocd-nl/PwnPatterns-ci (must match workflow uses @ pins).
+    description: Full commit SHA on justin-p/PwnPatterns-ci (must match workflow uses @ pins).
     required: true
   token:
     description: >
-      Token with read access to ocd-nl/PwnPatterns-ci. Defaults to github.token when empty;
+      Token with read access to justin-p/PwnPatterns-ci. Defaults to github.token when empty;
       set secret PWNPATTERNS_CI_CHECKOUT_TOKEN on the consumer if the default token cannot
       read the private platform repo.
     required: false
@@ -21,7 +21,7 @@ runs:
   steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       with:
-        repository: ocd-nl/PwnPatterns-ci
+        repository: justin-p/PwnPatterns-ci
         ref: ${{ inputs.platform_ref }}
         path: .github/pwnpatterns-ci
         token: ${{ inputs.token != '' && inputs.token || github.token }}

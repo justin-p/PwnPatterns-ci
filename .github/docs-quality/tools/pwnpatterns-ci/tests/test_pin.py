@@ -15,7 +15,7 @@ def test_verify_pin_mismatch(tmp_path: Path) -> None:
     sha_b = "b" * 40
     (tmp_path / ".github" / "platform.ref").write_text(sha_a + "\n", encoding="utf-8")
     (tmp_path / ".github" / "workflows" / "docs-quality.yml").write_text(
-        f"uses: ocd-nl/PwnPatterns-ci/.github/workflows/docs-quality.yml@{sha_b}\n",
+        f"uses: justin-p/PwnPatterns-ci/.github/workflows/docs-quality.yml@{sha_b}\n",
         encoding="utf-8",
     )
     errors = verify_pin(tmp_path)

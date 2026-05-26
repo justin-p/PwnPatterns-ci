@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 USES_SHA = re.compile(
-    r"uses:\s+ocd-nl/PwnPatterns-ci/\.github/(?:workflows|actions)/[^\s]+@([0-9a-f]{40})",
+    r"uses:\s+justin-p/PwnPatterns-ci/\.github/(?:workflows|actions)/[^\s]+@([0-9a-f]{40})",
     re.IGNORECASE,
 )
 PLATFORM_REF_INPUT = re.compile(
@@ -14,7 +14,7 @@ PLATFORM_REF_INPUT = re.compile(
     re.IGNORECASE,
 )
 CHECKOUT_PLATFORM_REF = re.compile(
-    r"repository:\s+ocd-nl/PwnPatterns-ci\s*\n\s+ref:\s*([0-9a-f]{40})",
+    r"repository:\s+justin-p/PwnPatterns-ci\s*\n\s+ref:\s*([0-9a-f]{40})",
     re.IGNORECASE,
 )
 USES_LOCAL = re.compile(
@@ -66,7 +66,7 @@ def verify_pin(repo_root: Path) -> list[str]:
         if uses_local:
             return errors
         errors.append(
-            "no platform pin found (ocd-nl/PwnPatterns-ci @SHA, platform_ref:, or checkout ref)"
+            "no platform pin found (justin-p/PwnPatterns-ci @SHA, platform_ref:, or checkout ref)"
         )
         return errors
 

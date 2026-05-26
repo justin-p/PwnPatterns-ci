@@ -1,11 +1,11 @@
-# Reusable actionlint + consumer shell lint (platform: ocd-nl/PwnPatterns-ci).
+# Reusable actionlint + consumer shell lint (platform: justin-p/PwnPatterns-ci).
 name: Documentation quality (actionlint)
 
 on:
   workflow_call:
     inputs:
       platform_ref:
-        description: ocd-nl/PwnPatterns-ci commit SHA (must match workflow uses pin)
+        description: justin-p/PwnPatterns-ci commit SHA (must match workflow uses pin)
         required: true
         type: string
     secrets:
@@ -31,7 +31,7 @@ jobs:
       - name: Checkout platform
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          repository: ocd-nl/PwnPatterns-ci
+          repository: justin-p/PwnPatterns-ci
           ref: ${{ inputs.platform_ref }}
           path: .github/pwnpatterns-ci
           token: ${{ secrets.PWNPATTERNS_CI_CHECKOUT_TOKEN != '' && secrets.PWNPATTERNS_CI_CHECKOUT_TOKEN || github.token }}
