@@ -269,15 +269,6 @@ ci_actionlint_job() {
   reporter="$(ci_reviewdog_reporter)"
   fail_level="$(ci_reviewdog_fail_level)"
   filter_mode="$(ci_reviewdog_filter_mode)"
-  if [ -s "${CI_LINT_LOG_DIR}/shellcheck.txt" ]; then
-    # shellcheck source=reviewdog-shellcheck.sh
-    source "${AUTOMATION_DIR}/lib/reviewdog-shellcheck.sh"
-    reviewdog_shellcheck_checkstyle "${CI_LINT_LOG_DIR}/shellcheck.txt" shellcheck \
-      -reporter="${reporter}" -fail-level="${fail_level}" -filter-mode="${filter_mode}"
-  fi
-
-  shfmt -d -ln bash -i 2 -ci "${scripts[@]}"
-  echo $? >"${CI_LINT_LOG_DIR}/shfmt.exit"
 
   if command -v actionlint >/dev/null 2>&1; then
     set +e
@@ -292,6 +283,18 @@ ci_actionlint_job() {
   else
     echo 0 >"${CI_LINT_LOG_DIR}/actionlint.exit"
   fi
+
+  set +e
+  shfmt -d -ln bash -i 2 -ci "${scripts[@]}" >"${CI_LINT_LOG_DIR}/shfmt.diff" 2>&1
+  echo "$?" >"${CI_LINT_LOG_DIR}/shfmt.exit"
+  set -e
+
+  if [ -s "${CI_LINT_LOG_DIR}/shellcheck.txt" ]; then
+    # shellcheck source=reviewdog-shellcheck.sh
+    source "${AUTOMATION_DIR}/lib/reviewdog-shellcheck.sh"
+    reviewdog_shellcheck_checkstyle "${CI_LINT_LOG_DIR}/shellcheck.txt" shellcheck \
+      -reporter="${reporter}" -fail-level="${fail_level}" -filter-mode="${filter_mode}"
+  fi
 }
 
 ci_fail_actionlint() {
@@ -301,6 +304,8 @@ ci_fail_actionlint() {
     fail=1
   fi
   if [ -f "${CI_LINT_LOG_DIR}/shfmt.exit" ] && [ "$(cat "${CI_LINT_LOG_DIR}/shfmt.exit")" -ne 0 ]; then
+    echo "shfmt: formatting differs (see ${CI_LINT_LOG_DIR}/shfmt.diff)" >&2
+    cat "${CI_LINT_LOG_DIR}/shfmt.diff" 2>/dev/null || true
     fail=1
   fi
   if [ -f "${CI_LINT_LOG_DIR}/actionlint.exit" ] && [ "$(cat "${CI_LINT_LOG_DIR}/actionlint.exit")" -ne 0 ]; then
