@@ -271,14 +271,16 @@ ci_actionlint_job() {
   filter_mode="$(ci_reviewdog_filter_mode)"
 
   if command -v actionlint >/dev/null 2>&1; then
-    set +e
-    actionlint .github/workflows/*.yml >"${CI_LINT_LOG_DIR}/actionlint.txt" 2>"${CI_LINT_LOG_DIR}/actionlint.stderr"
-    echo "$?" >"${CI_LINT_LOG_DIR}/actionlint.exit"
-    set -e
-    if [ -s "${CI_LINT_LOG_DIR}/actionlint.txt" ]; then
-      reviewdog -f=actionlint -name=actionlint \
-        -reporter="${reporter}" -fail-level="${fail_level}" -filter-mode="${filter_mode}" \
-        <"${CI_LINT_LOG_DIR}/actionlint.txt" || true
+    mapfile -t workflows < <(
+      find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null | sort
+    )
+    if [ "${#workflows[@]}" -eq 0 ]; then
+      echo 0 >"${CI_LINT_LOG_DIR}/actionlint.exit"
+    else
+      set +e
+      actionlint "${workflows[@]}" >"${CI_LINT_LOG_DIR}/actionlint.txt" 2>&1
+      echo "$?" >"${CI_LINT_LOG_DIR}/actionlint.exit"
+      set -e
     fi
   else
     echo 0 >"${CI_LINT_LOG_DIR}/actionlint.exit"
@@ -288,6 +290,12 @@ ci_actionlint_job() {
   shfmt -d -ln bash -i 2 -ci "${scripts[@]}" >"${CI_LINT_LOG_DIR}/shfmt.diff" 2>&1
   echo "$?" >"${CI_LINT_LOG_DIR}/shfmt.exit"
   set -e
+
+  if [ -s "${CI_LINT_LOG_DIR}/actionlint.txt" ]; then
+    reviewdog -f=actionlint -name=actionlint \
+      -reporter="${reporter}" -fail-level="${fail_level}" -filter-mode="${filter_mode}" \
+      <"${CI_LINT_LOG_DIR}/actionlint.txt" || true
+  fi
 
   if [ -s "${CI_LINT_LOG_DIR}/shellcheck.txt" ]; then
     # shellcheck source=reviewdog-shellcheck.sh
@@ -309,7 +317,7 @@ ci_fail_actionlint() {
     fail=1
   fi
   if [ -f "${CI_LINT_LOG_DIR}/actionlint.exit" ] && [ "$(cat "${CI_LINT_LOG_DIR}/actionlint.exit")" -ne 0 ]; then
-    cat "${CI_LINT_LOG_DIR}/actionlint.stderr" 2>/dev/null || true
+    cat "${CI_LINT_LOG_DIR}/actionlint.txt" 2>/dev/null || true
     fail=1
   fi
   return "${fail}"
