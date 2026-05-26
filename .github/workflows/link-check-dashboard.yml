@@ -1,0 +1,137 @@
+# Reusable scheduled link dashboard (platform: ocd-nl/PwnPatterns-ci).
+name: link-check-dashboard (platform)
+
+on:
+  workflow_call:
+    inputs:
+      platform_ref:
+        description: ocd-nl/PwnPatterns-ci commit SHA (must match workflow uses pin)
+        required: true
+        type: string
+    secrets:
+      PWNPATTERNS_CI_CHECKOUT_TOKEN:
+        description: Optional PAT for checkout when GITHUB_TOKEN cannot read the private platform repo
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  lychee:
+    name: Check if all existing links are still valid
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Checkout platform
+        uses: ocd-nl/PwnPatterns-ci/.github/actions/checkout-platform@64b42f452bb4b97147f1aed752b719f6dd0ef835
+        with:
+          platform_ref: ${{ inputs.platform_ref }}
+          token: ${{ secrets.PWNPATTERNS_CI_CHECKOUT_TOKEN }}
+
+      - name: Load dashboard issue config
+        run: bash .github/pwnpatterns-ci/.github/lychee/automation/bin/load-dashboard-config.sh
+
+      - name: Restore lychee cache
+        id: restore-cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: .lycheecache
+          key: cache-lychee-v2-${{ github.sha }}
+          restore-keys: cache-lychee-v2-
+
+      - name: Run lychee
+        id: lychee
+        continue-on-error: true
+        uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2.8.0
+        with:
+          fail: false
+          failIfEmpty: true
+          format: json
+          output: lychee/report.json
+          checkbox: false
+          token: ${{ github.token }}
+          jobSummary: false
+          args: --config .lychee.toml './docs/**/*.md'
+
+      - name: Filter datacenter 403 on known hosts
+        id: filter_403
+        run: |
+          set -euo pipefail
+          hosts_json="$(grep -vE "^\s*(#|\$)" .github/lychee/config/ci-403-hosts.txt | jq -Rsc 'split("\n") | map(select(length > 0))')"
+          tmp="$(mktemp)"
+          jq -f .github/pwnpatterns-ci/.github/lychee/automation/filters/filter-datacenter-403.jq \
+            --slurpfile hosts <(echo "$hosts_json") \
+            lychee/report.json >"$tmp"
+          mv "$tmp" lychee/report.json
+          errors="$(jq '.errors // 0' lychee/report.json)"
+          suppressed="$(jq '.datacenter_403_suppressed // 0' lychee/report.json)"
+          echo "Filtered datacenter 403: suppressed=${suppressed}, remaining errors=${errors}"
+          if [[ "$errors" -eq 0 ]]; then echo "exit_code=0" >> "$GITHUB_OUTPUT"; else echo "exit_code=1" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Update broken-links issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LYCHEE_OUTCOME: ${{ steps.filter_403.outputs.exit_code == '0' && 'success' || 'failure' }}
+          RERUN_URL: https://github.com/${{ github.repository }}/actions/workflows/link-check-dashboard.yml?query=branch%3Amain
+          DASHBOARD_ISSUE_NUMBER: ${{ env.issue_number }}
+          DASHBOARD_ISSUE_TITLE: ${{ env.issue_title }}
+        run: |
+          set -euo pipefail
+          body_file="${RUNNER_TEMP}/issue-body.md"
+          if [ ! -f lychee/report.json ]; then
+            {
+              echo '#### Link check report missing'
+              echo ''
+              echo "\`lychee/report.json\` was not found in the workflow workspace."
+              echo ''
+              echo "[Re-run link check](${RERUN_URL})"
+            } > "$body_file"
+          else
+            jq -r -f .github/pwnpatterns-ci/.github/lychee/automation/filters/dashboard-issue-body.jq \
+              --arg repo "${{ github.repository }}" \
+              --arg ref main \
+              --arg rerun "${RERUN_URL}" \
+              --arg outcome "${LYCHEE_OUTCOME}" \
+              lychee/report.json > "$body_file"
+          fi
+
+          issue_number=""
+
+          if gh issue view "$DASHBOARD_ISSUE_NUMBER" >/dev/null 2>&1; then
+            issue_number="$DASHBOARD_ISSUE_NUMBER"
+          else
+            issue_number="$(gh issue list \
+              --label broken-links \
+              --state open \
+              --json number,title \
+              --limit 100 \
+              | jq -r --arg title "$DASHBOARD_ISSUE_TITLE" \
+                  ".[] | select(.title == \$title) | .number" \
+              | head -n1)"
+          fi
+
+          if [ -n "$issue_number" ]; then
+            gh issue edit "$issue_number" --body-file "$body_file"
+          else
+            issue_number="$(gh issue create \
+              --title "$DASHBOARD_ISSUE_TITLE" \
+              --body-file "$body_file" \
+              --label broken-links \
+              --json number --jq .number)"
+            if [ "$issue_number" != "$DASHBOARD_ISSUE_NUMBER" ]; then
+              echo "::warning::Created issue #${issue_number}. Update LINK_CHECK_DASHBOARD_ISSUE_NUMBER in .github/lychee/config/link-check-dashboard-issue.env (currently #${DASHBOARD_ISSUE_NUMBER})." >&2
+            fi
+          fi
+
+      - name: Save lychee cache
+        if: always()
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: .lycheecache
+          key: ${{ steps.restore-cache.outputs.cache-primary-key }}
+
+      - name: Fail workflow
+        if: steps.filter_403.outputs.exit_code != '0'
+        run: exit 1
