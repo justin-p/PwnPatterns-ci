@@ -287,9 +287,10 @@ ci_actionlint_job() {
   fail_level="$(ci_reviewdog_fail_level)"
   filter_mode="$(ci_reviewdog_filter_mode)"
   if [ -s "${CI_LINT_LOG_DIR}/shellcheck.txt" ]; then
-    reviewdog -f=shellcheck -name=shellcheck \
-      -reporter="${reporter}" -fail-level="${fail_level}" -filter-mode="${filter_mode}" \
-      <"${CI_LINT_LOG_DIR}/shellcheck.txt" || true
+    # shellcheck source=reviewdog-shellcheck.sh
+    source "${AUTOMATION_DIR}/lib/reviewdog-shellcheck.sh"
+    reviewdog_shellcheck_gcc "${CI_LINT_LOG_DIR}/shellcheck.txt" shellcheck \
+      -reporter="${reporter}" -fail-level="${fail_level}" -filter-mode="${filter_mode}"
   fi
 
   shfmt -d -ln bash -i 2 -ci "${scripts[@]}"

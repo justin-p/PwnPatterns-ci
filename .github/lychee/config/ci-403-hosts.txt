@@ -1,0 +1,8 @@
+# Default datacenter-403 allowlist (override in consumer .github/lychee/config/ci-403-hosts.txt).
+www.wikiwand.com
+www.cloudflare.com
+linux.die.net
+help.ui.com
+www.blackhat.com
+www.cisco.com
+www.samba.org

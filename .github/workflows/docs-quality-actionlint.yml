@@ -65,9 +65,11 @@ jobs:
           echo "$?" >lint-logs/shellcheck.exit
           set -e
           if [ -s lint-logs/shellcheck.txt ]; then
-            reviewdog -f=shellcheck -name=shellcheck \
+            # shellcheck source=/dev/null
+            source "${DOCS_QUALITY_DIR}/automation/lib/reviewdog-shellcheck.sh"
+            reviewdog_shellcheck_gcc lint-logs/shellcheck.txt shellcheck \
               -reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}" \
-              -fail-level=error -filter-mode=file <lint-logs/shellcheck.txt || true
+              -fail-level=error -filter-mode=file
           fi
 
       - name: Check shfmt

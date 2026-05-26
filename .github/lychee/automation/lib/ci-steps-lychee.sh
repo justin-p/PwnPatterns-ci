@@ -13,8 +13,18 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/env.sh"
 LYCHEE_VERSION="${LYCHEE_VERSION:-0.24.2}"
 LYCHEE_INSTALL_DIR="${LYCHEE_INSTALL_DIR:-${DOC_LINT_INSTALL_DIR:-/tmp}}"
 
+_lychee_runnable() {
+  local bin="$1"
+  [ -n "${bin}" ] && [ -x "${bin}" ] && "${bin}" --version >/dev/null 2>&1
+}
+
 lychee_install_cli() {
-  if command -v lychee >/dev/null 2>&1; then
+  mkdir -p "${LYCHEE_INSTALL_DIR}"
+  export PATH="${LYCHEE_INSTALL_DIR}:${PATH}"
+  if _lychee_runnable "${LYCHEE_INSTALL_DIR}/lychee"; then
+    return 0
+  fi
+  if command -v lychee >/dev/null 2>&1 && _lychee_runnable "$(command -v lychee)"; then
     return 0
   fi
   : "${LYCHEE_VERSION:?LYCHEE_VERSION is required}"
@@ -76,7 +86,7 @@ ci_lychee_report_reviewdog() {
     fail_level=none
     filter_mode=nofilter
   fi
-  jq -r -L "${REPO_ROOT}/.github/docs-quality/automation/filters/lib" \
+  jq -r -L "${LYCHEE_JQ_LIB}" \
     -f "${LYCHEE_TO_RDJSONL_JQ}" "${report}" |
     reviewdog -f=rdjsonl -name=lychee \
       -reporter="${reporter}" -fail-level="${fail_level}" -filter-mode="${filter_mode}" ||

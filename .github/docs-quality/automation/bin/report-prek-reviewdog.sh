@@ -62,9 +62,10 @@ if [ -f "${log_file}" ]; then
   fi
 
   if [ -s "${shellcheck_txt}" ]; then
-    reviewdog -f=shellcheck -name=prek-shellcheck \
-      -reporter="${reporter}" -fail-level="${fail_level}" -filter-mode="${filter_mode}" \
-      <"${shellcheck_txt}" || true
+    # shellcheck source=../lib/reviewdog-shellcheck.sh
+    source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/reviewdog-shellcheck.sh"
+    reviewdog_shellcheck_gcc "${shellcheck_txt}" prek-shellcheck \
+      -reporter="${reporter}" -fail-level="${fail_level}" -filter-mode="${filter_mode}"
     reported=1
   fi
 fi
