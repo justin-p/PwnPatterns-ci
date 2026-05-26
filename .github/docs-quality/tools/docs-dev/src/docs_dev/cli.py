@@ -116,7 +116,10 @@ def main(
         skip_lychee=skip_lychee,
         skip_actionlint=skip_actionlint,
     )
-    report = run_check(ctx, opts)
+    def on_progress(message: str) -> None:
+        console.print(message)
+
+    report = run_check(ctx, opts, on_progress=on_progress)
     _emit_check_report(report, format)
     raise typer.Exit(0 if report.passed else 1)
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,6 +22,13 @@ from docs_dev.template_list_contractions import (
 )
 from docs_dev.vale_fix import apply_vale_line_fixes, collect_contraction_fixes, load_vale_json
 
+ProgressFn = Callable[[str], None]
+
+
+def _progress(on_progress: ProgressFn | None, message: str) -> None:
+    if on_progress is not None:
+        on_progress(message)
+
 
 @dataclass
 class CheckOptions:
@@ -32,15 +40,20 @@ class CheckOptions:
     git_head: str = "HEAD"
 
 
-def _setup_job(ctx: RepoContext) -> int:
+def _setup_job(ctx: RepoContext, on_progress: ProgressFn | None = None) -> int:
+    _progress(on_progress, "Preparing Harper config…")
     ctx.prepare_harper_config()
+    _progress(on_progress, "Syncing allowlists…")
     r = run_bash_script(ctx, ctx.automation_bin / "sync-allowlists.sh")
     if r.returncode != 0:
         return r.returncode
+    _progress(on_progress, "Verifying doc linters…")
     r = run_bash_script(ctx, ctx.automation_install / "doc-linters.sh")
     if r.returncode != 0:
         return r.returncode
+    _progress(on_progress, "Syncing Vale styles…")
     run_bash_script(ctx, ctx.automation_bin / "vale-sync.sh")
+    _progress(on_progress, "Ensuring prek is installed…")
     run(ctx, ["uv", "tool", "install", "prek"])
     return 0
 
@@ -151,9 +164,16 @@ def _run_harper(ctx: RepoContext, paths: list[str]) -> int:
     return code
 
 
-def _run_prose_tools(ctx: RepoContext, paths: list[str]) -> bool:
+def _run_prose_tools(
+    ctx: RepoContext,
+    paths: list[str],
+    *,
+    on_progress: ProgressFn | None = None,
+) -> bool:
     """Run vale, typos, rumdl, and grammar tools on *paths*. Return True if any tool failed."""
     import os
+
+    from docs_dev.subprocess_util import stream_bash_script
 
     _write_lint_paths(ctx, paths)
     ctx.lint_log_dir.mkdir(parents=True, exist_ok=True)
@@ -163,12 +183,21 @@ def _run_prose_tools(ctx: RepoContext, paths: list[str]) -> bool:
     ignore = ctx.manifest.harper_ignore_rules_csv(ctx.repo_root)
     if ignore:
         os.environ["HARPER_IGNORE_RULES"] = ignore
-    r = run_bash_script(
-        ctx,
-        ctx.automation_bin / "run-parallel-prose-lint.sh",
-        str(ctx.lint_log_dir),
+    _progress(
+        on_progress,
+        f"Prose lint on {len(paths)} file(s) (vale, typos, rumdl, harper, languagetool)…",
     )
-    return r.returncode != 0 or _prose_failed(ctx)
+    script = ctx.automation_bin / "run-parallel-prose-lint.sh"
+    if on_progress is not None:
+        code = stream_bash_script(
+            ctx,
+            script,
+            str(ctx.lint_log_dir),
+            on_line=on_progress,
+        )
+    else:
+        code = run_bash_script(ctx, script, str(ctx.lint_log_dir)).returncode
+    return code != 0 or _prose_failed(ctx)
 
 
 def _record_lint_exits_from_json(ctx: RepoContext) -> None:
@@ -177,24 +206,35 @@ def _record_lint_exits_from_json(ctx: RepoContext) -> None:
         run_bash_script(ctx, script, str(ctx.lint_log_dir))
 
 
-def run_prose_lint(ctx: RepoContext, paths: list[str]) -> list[Finding]:
+def run_prose_lint(
+    ctx: RepoContext,
+    paths: list[str],
+    *,
+    on_progress: ProgressFn | None = None,
+) -> list[Finding]:
     """Run prose linters on *paths* and return findings for those paths only."""
     if not paths:
         return []
-    _run_prose_tools(ctx, paths)
+    _run_prose_tools(ctx, paths, on_progress=on_progress)
     allowed = set(paths)
     return [f for f in parse_all_lint_logs(ctx.lint_log_dir, paths) if f.path in allowed]
 
 
-def _parallel_prose_lint(ctx: RepoContext, paths: list[str]) -> StepResult:
-    failed = _run_prose_tools(ctx, paths)
+def _parallel_prose_lint(
+    ctx: RepoContext,
+    paths: list[str],
+    *,
+    on_progress: ProgressFn | None = None,
+) -> StepResult:
+    failed = _run_prose_tools(ctx, paths, on_progress=on_progress)
     return StepResult(
         name="prose lint",
         status=StepStatus.FAIL if failed else StepStatus.PASS,
     )
 
 
-def _run_prek(ctx: RepoContext) -> StepResult:
+def _run_prek(ctx: RepoContext, on_progress: ProgressFn | None = None) -> StepResult:
+    _progress(on_progress, "Running prek hooks…")
     r = run(
         ctx,
         ["prek", "run", "--all-files", "--show-diff-on-failure"],
@@ -206,7 +246,12 @@ def _run_prek(ctx: RepoContext) -> StepResult:
     )
 
 
-def _run_metadata(ctx: RepoContext, paths: list[str]) -> StepResult:
+def _run_metadata(
+    ctx: RepoContext,
+    paths: list[str],
+    on_progress: ProgressFn | None = None,
+) -> StepResult:
+    _progress(on_progress, f"Verifying metadata on {len(paths)} file(s)…")
     out = ctx.lint_log_dir / "metadata.rdjsonl"
     err = ctx.lint_log_dir / "metadata.stderr"
     project = ctx.docs_quality_dir / "tools" / "verify-metadata"
@@ -231,7 +276,12 @@ def _run_metadata(ctx: RepoContext, paths: list[str]) -> StepResult:
     )
 
 
-def _run_lychee_offline(ctx: RepoContext, paths: list[str]) -> StepResult:
+def _run_lychee_offline(
+    ctx: RepoContext,
+    paths: list[str],
+    on_progress: ProgressFn | None = None,
+) -> StepResult:
+    _progress(on_progress, f"Checking cached links (offline) on {len(paths)} file(s)…")
     report = ctx.repo_root / "lychee" / "report-offline.json"
     report.parent.mkdir(parents=True, exist_ok=True)
     log = ctx.lint_log_dir / "lychee-offline.log"
@@ -267,13 +317,25 @@ def _run_lychee_offline(ctx: RepoContext, paths: list[str]) -> StepResult:
     )
 
 
-def _run_shell(ctx: RepoContext, *, autofix: bool) -> StepResult:
+def _run_shell(
+    ctx: RepoContext,
+    *,
+    autofix: bool,
+    on_progress: ProgressFn | None = None,
+) -> StepResult:
+    from docs_dev.subprocess_util import stream_bash_script
+
+    label = "shellcheck/shfmt (autofix)…" if autofix else "shellcheck/shfmt…"
+    _progress(on_progress, f"Linting {label}")
     env = {"CI_LINT_AUTOFIX": "true"} if autofix else {}
-    r = run_bash_script(
-        ctx,
-        ctx.automation_bin / "lint-shell.sh",
-        env_extra=env,
-    )
+    script = ctx.automation_bin / "lint-shell.sh"
+    if on_progress is not None:
+        code = stream_bash_script(ctx, script, env_extra=env, on_line=on_progress)
+        return StepResult(
+            name="shell",
+            status=StepStatus.PASS if code == 0 else StepStatus.FAIL,
+        )
+    r = run_bash_script(ctx, script, env_extra=env)
     return StepResult(
         name="shell",
         status=StepStatus.PASS if r.returncode == 0 else StepStatus.FAIL,
@@ -281,10 +343,11 @@ def _run_shell(ctx: RepoContext, *, autofix: bool) -> StepResult:
     )
 
 
-def _run_actionlint(ctx: RepoContext) -> StepResult:
+def _run_actionlint(ctx: RepoContext, on_progress: ProgressFn | None = None) -> StepResult:
     workflows = sorted(ctx.repo_root.glob(".github/workflows/*.yml"))
     if not workflows:
         return StepResult(name="actionlint", status=StepStatus.PASS)
+    _progress(on_progress, f"Linting {len(workflows)} workflow(s) with actionlint…")
     r = run(
         ctx,
         [ctx.tool_path("actionlint"), *[str(w) for w in workflows]],
@@ -304,7 +367,12 @@ def _prose_failed(ctx: RepoContext) -> bool:
     return False
 
 
-def run_check(ctx: RepoContext, opts: CheckOptions) -> CheckReport:
+def run_check(
+    ctx: RepoContext,
+    opts: CheckOptions,
+    *,
+    on_progress: ProgressFn | None = None,
+) -> CheckReport:
     report = CheckReport(
         command="check",
         options={
@@ -325,27 +393,37 @@ def run_check(ctx: RepoContext, opts: CheckOptions) -> CheckReport:
         )
         return report
 
-    if _setup_job(ctx) != 0:
+    _progress(on_progress, "Setting up linters…")
+    if _setup_job(ctx, on_progress) != 0:
         report.steps.append(StepResult(name="setup", status=StepStatus.FAIL))
         return report
 
     paths = _resolve_paths(ctx, opts)
     if not paths:
+        _progress(on_progress, "No markdown files to lint.")
         report.steps.append(
             StepResult(name="paths", status=StepStatus.PASS, detail="no markdown to lint")
         )
         return report
 
+    scope = "changed" if opts.changed else "all"
+    _progress(on_progress, f"Found {len(paths)} {scope} markdown file(s).")
+
     if opts.fix:
+        _progress(on_progress, "Applying autofix (vale, typos, rumdl)…")
         _apply_autofix(ctx, paths)
         report.steps.append(StepResult(name="autofix", status=StepStatus.PASS))
-        report.steps.append(_parallel_prose_lint(ctx, paths))
-        report.steps.append(_run_prek(ctx))
+        report.steps.append(
+            _parallel_prose_lint(ctx, paths, on_progress=on_progress)
+        )
+        report.steps.append(_run_prek(ctx, on_progress))
     else:
-        report.steps.append(_parallel_prose_lint(ctx, paths))
-        report.steps.append(_run_prek(ctx))
+        report.steps.append(
+            _parallel_prose_lint(ctx, paths, on_progress=on_progress)
+        )
+        report.steps.append(_run_prek(ctx, on_progress))
 
-    report.steps.append(_run_metadata(ctx, paths))
+    report.steps.append(_run_metadata(ctx, paths, on_progress))
 
     if opts.skip_lychee:
         report.steps.append(
@@ -354,7 +432,7 @@ def run_check(ctx: RepoContext, opts: CheckOptions) -> CheckReport:
     else:
         lychee_bin = ctx.doc_lint_install_dir / "lychee"
         if lychee_bin.is_file():
-            report.steps.append(_run_lychee_offline(ctx, paths))
+            report.steps.append(_run_lychee_offline(ctx, paths, on_progress))
         else:
             report.steps.append(
                 StepResult(
@@ -364,13 +442,14 @@ def run_check(ctx: RepoContext, opts: CheckOptions) -> CheckReport:
                 )
             )
 
-    report.steps.append(_run_shell(ctx, autofix=opts.fix))
+    report.steps.append(_run_shell(ctx, autofix=opts.fix, on_progress=on_progress))
 
     if opts.skip_actionlint:
         report.steps.append(StepResult(name="actionlint", status=StepStatus.SKIP))
     else:
-        report.steps.append(_run_actionlint(ctx))
+        report.steps.append(_run_actionlint(ctx, on_progress))
 
+    _progress(on_progress, "Collecting findings…")
     findings = parse_all_lint_logs(ctx.lint_log_dir, paths)
     if _prose_failed(ctx) or any(
         s.name == "lychee (offline)" and s.status == StepStatus.FAIL for s in report.steps

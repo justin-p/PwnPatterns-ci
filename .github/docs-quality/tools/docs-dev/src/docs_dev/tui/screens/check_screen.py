@@ -7,7 +7,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, DataTable, Footer, Header, Input, Static, TextArea
+from textual.widgets import Button, DataTable, Footer, Header, Input, RichLog, Static, TextArea
 
 from docs_dev.allowlist import (
     add_term,
@@ -21,6 +21,7 @@ from docs_dev.allowlist import (
     terms_case_pair_from_finding,
 )
 from docs_dev.context import RepoContext
+from docs_dev.log_util import sanitize_log_line
 from docs_dev.models import FileFindings, Finding
 from docs_dev.runners.check import CheckOptions, run_check, run_prose_lint
 from docs_dev.tui.editor_theme import register_bearded_editor_theme
@@ -100,6 +101,9 @@ class CheckScreen(Screen):
             yield Button("Allowlist  [a]", id="allowlist", variant="success")
             yield Button("Recheck file  [c]", id="recheck-file")
             yield Button("Home  [h]", id="home")
+        with Vertical(id="check-progress-panel", classes="-hidden"):
+            yield Static("", id="check-progress-status", classes="muted")
+            yield RichLog(id="check-progress", highlight=True, markup=False)
         with Horizontal(id="results-body", classes="-editor-hidden"):
             with Vertical(id="results-left"):
                 with Vertical(id="files-panel"):
@@ -393,6 +397,24 @@ class CheckScreen(Screen):
     def action_fix(self) -> None:
         self._confirm_editor_close_if_dirty(lambda: self._start_check(fix=True))
 
+    def _set_progress_panel_visible(self, visible: bool) -> None:
+        panel = self.query_one("#check-progress-panel")
+        if visible:
+            panel.remove_class("-hidden")
+        else:
+            panel.add_class("-hidden")
+
+    def _append_progress(self, message: str) -> None:
+        text = sanitize_log_line(message)
+        if not text:
+            return
+        self.query_one("#check-progress-status", Static).update(text)
+        log = self.query_one("#check-progress", RichLog)
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped:
+                log.write(stripped)
+
     def _start_check(self, *, fix: bool) -> None:
         if self._check_worker is not None and self._check_worker.is_running:
             return
@@ -402,6 +424,12 @@ class CheckScreen(Screen):
         run_btn.disabled = True
         fix_btn.disabled = True
         self._update_toolbar_buttons()
+        self._set_progress_panel_visible(True)
+        progress_log = self.query_one("#check-progress", RichLog)
+        progress_log.clear()
+        self.query_one("#check-progress-status", Static).update(
+            f"Starting {verb} on {self._mode_label}…"
+        )
         self.query_one("#summary", Static).update(
             f"[yellow]Running {verb} on {self._mode_label}…[/]"
         )
@@ -421,8 +449,11 @@ class CheckScreen(Screen):
             skip_lychee=self._opts.skip_lychee,
             skip_actionlint=self._opts.skip_actionlint,
         )
+        def on_progress(message: str) -> None:
+            self.app.call_from_thread(self._append_progress, message)
+
         self._check_worker = self.run_worker(
-            lambda: run_check(self._ctx, opts),
+            lambda: run_check(self._ctx, opts, on_progress=on_progress),
             thread=True,
             exclusive=True,
         )
@@ -462,7 +493,13 @@ class CheckScreen(Screen):
                 return False, f"{msg}; sync exited {rc}", file_path, []
             findings: list[Finding] = []
             if file_path:
-                findings = run_prose_lint(self._ctx, [file_path])
+                findings = run_prose_lint(
+                    self._ctx,
+                    [file_path],
+                    on_progress=lambda m: self.app.call_from_thread(
+                        self._append_progress, m
+                    ),
+                )
             return True, f"{msg}. Re-scanned file.", file_path, findings
 
         self._allowlist_worker = self.run_worker(
@@ -485,10 +522,19 @@ class CheckScreen(Screen):
             return
 
         self.notify(f"Re-linting {display_path(path, self._ctx.repo_root)}…", timeout=3)
+        self._set_progress_panel_visible(True)
+        self.query_one("#check-progress", RichLog).clear()
+        self._append_progress(f"Re-linting {display_path(path, self._ctx.repo_root)}…")
         self._update_toolbar_buttons()
 
         def work() -> tuple[str, list[Finding]]:
-            return path, run_prose_lint(self._ctx, [path])
+            return path, run_prose_lint(
+                self._ctx,
+                [path],
+                on_progress=lambda m: self.app.call_from_thread(
+                    self._append_progress, m
+                ),
+            )
 
         self._file_lint_worker = self.run_worker(
             lambda: work(),
@@ -518,6 +564,8 @@ class CheckScreen(Screen):
                 title="Recheck",
                 timeout=6,
             )
+            if self._check_worker is None or not self._check_worker.is_running:
+                self._set_progress_panel_visible(False)
             return
 
         allow_worker = getattr(self, "_allowlist_worker", None)
@@ -548,6 +596,7 @@ class CheckScreen(Screen):
         fix_btn = self.query_one("#fix", Button)
         run_btn.disabled = False
         fix_btn.disabled = False
+        self._set_progress_panel_visible(False)
         try:
             report = event.worker.result
         except Exception as exc:

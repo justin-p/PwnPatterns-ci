@@ -252,6 +252,29 @@ Footer {
     text-style: bold;
 }
 
+#check-progress-panel {
+    padding: 0 2;
+    height: auto;
+    max-height: 10;
+}
+
+#check-progress-panel.-hidden {
+    display: none;
+}
+
+#check-progress-status {
+    padding: 0 0 0 0;
+    height: auto;
+}
+
+#check-progress {
+    height: auto;
+    max-height: 7;
+    border: solid $border;
+    padding: 0 1;
+    background: $surface;
+}
+
 #results-body {
     height: 1fr;
     min-height: 18;
