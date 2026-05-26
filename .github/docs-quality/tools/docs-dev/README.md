@@ -34,7 +34,8 @@ The shell wrapper accepts commands (`check`, `fix`, `setup`, `web`) and global f
 | `--format plain` | One finding per line |
 | `--fix` | typos, rumdl, prek fixers, shfmt; then re-check |
 | `--changed` | `docs/**/*.md` changed on the branch vs `origin/main` plus local edits |
-| `--skip-lychee` | Skip offline lychee |
+| `--skip-lychee` | Skip link checking |
+| `--lychee-offline` | Lychee cache-only (default: live HTTP, like CI) |
 | `--skip-actionlint` | Skip workflow lint |
 
 ## JSON schema

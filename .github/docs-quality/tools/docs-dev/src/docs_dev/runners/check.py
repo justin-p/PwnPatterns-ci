@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -42,6 +43,7 @@ class CheckOptions:
     changed: bool = False
     fix: bool = False
     skip_lychee: bool = False
+    lychee_offline: bool = False
     skip_actionlint: bool = False
     skip_shell: bool = False
     skip_prek: bool = False
@@ -308,66 +310,66 @@ def _run_metadata(
     )
 
 
-def _lychee_install_bash(ctx: RepoContext) -> str:
+def _lychee_bash(ctx: RepoContext, paths: list[str], *, offline: bool) -> str:
     lychee_lib = ctx.docs_quality_dir.parent / "lychee" / "automation" / "lib" / "ci-steps-lychee.sh"
+    fn = "ci_lychee_offline" if offline else "ci_lychee_docs_dev"
+    path_args = " ".join(shlex.quote(p) for p in paths)
     return (
         "set -euo pipefail; "
         f"source {ctx.automation_dir / 'lib' / 'env.sh'}; "
         f"source {lychee_lib}; "
-        "lychee_install_cli"
+        f"export CI_LINT_LOG_DIR={shlex.quote(str(ctx.lint_log_dir))}; "
+        f"{fn} {path_args}"
     )
 
 
-def _run_lychee_offline(
+def _lychee_report_path(ctx: RepoContext, *, offline: bool) -> Path:
+    name = "report-offline.json" if offline else "report-docs-dev.json"
+    return ctx.repo_root / "lychee" / name
+
+
+def _run_lychee(
     ctx: RepoContext,
     paths: list[str],
     on_progress: ProgressFn | None = None,
+    *,
+    offline: bool = False,
 ) -> StepResult:
-    _progress(on_progress, f"Checking cached links (offline) on {len(paths)} file(s)…")
-    install = run(ctx, ["bash", "-c", _lychee_install_bash(ctx)])
-    if install.returncode != 0:
-        detail = (install.stderr or install.stdout or "").strip().splitlines()
-        hint = detail[-1] if detail else "lychee install failed"
-        return StepResult(
-            name="lychee (offline)",
-            status=StepStatus.FAIL,
-            detail=hint[:200],
-        )
-    report = ctx.repo_root / "lychee" / "report-offline.json"
-    report.parent.mkdir(parents=True, exist_ok=True)
-    log = ctx.lint_log_dir / "lychee-offline.log"
+    step_name = "lychee (offline)" if offline else "lychee"
+    if offline:
+        _progress(on_progress, f"Checking cached links only on {len(paths)} file(s)…")
+    else:
+        _progress(on_progress, f"Checking links (HTTP) on {len(paths)} file(s)…")
+    report = _lychee_report_path(ctx, offline=offline)
+    log = ctx.lint_log_dir / "lychee.log"
     r = run(
         ctx,
-        [
-            ctx.tool_path("lychee"),
-            "--config",
-            ".lychee.toml",
-            "--offline",
-            "--no-progress",
-            "--format",
-            "json",
-            "--output",
-            str(report),
-            *paths,
-        ],
+        ["bash", "-c", _lychee_bash(ctx, paths, offline=offline)],
+        env_extra={
+            "LYCHEE_DOCS_DEV_REPORT": str(report),
+            "LYCHEE_OFFLINE_REPORT": str(report),
+        },
     )
     log.write_text((r.stdout or "") + (r.stderr or ""), encoding="utf-8")
     if not report.is_file():
         tail = (r.stderr or r.stdout or "").strip().splitlines()
         hint = tail[-1][:160] if tail else "no report produced"
         return StepResult(
-            name="lychee (offline)",
+            name=step_name,
             status=StepStatus.FAIL,
             detail=hint,
         )
     data = json.loads(report.read_text(encoding="utf-8"))
     errors = int(data.get("errors") or 0)
     status = StepStatus.PASS if errors == 0 else StepStatus.FAIL
-    return StepResult(
-        name="lychee (offline)",
-        status=status,
-        detail=f"{errors} cached link error(s)" if errors else None,
-    )
+    detail = None
+    if errors:
+        detail = (
+            f"{errors} cached link error(s)"
+            if offline
+            else f"{errors} broken link(s)"
+        )
+    return StepResult(name=step_name, status=status, detail=detail)
 
 
 def _run_shell(
@@ -510,7 +512,7 @@ def _findings_for_unreported_tool_failures(
         )
 
     if "lychee" not in tools_with_findings:
-        log = ctx.lint_log_dir / "lychee-offline.log"
+        log = ctx.lint_log_dir / "lychee.log"
         if log.is_file():
             tail = log.read_text(encoding="utf-8").strip().splitlines()
             if tail and "error" in tail[-1].lower():
@@ -522,7 +524,7 @@ def _findings_for_unreported_tool_failures(
                         column=1,
                         severity="error",
                         message=tail[-1][:200],
-                        rule="lychee.offline",
+                        rule="lychee.run",
                     )
                 )
 
@@ -541,6 +543,7 @@ def run_check(
             "changed": opts.changed,
             "fix": opts.fix,
             "skip_lychee": opts.skip_lychee,
+            "lychee_offline": opts.lychee_offline,
             "skip_actionlint": opts.skip_actionlint,
             "skip_shell": opts.skip_shell,
             "skip_prek": opts.skip_prek,
@@ -596,17 +599,17 @@ def run_check(
     report.steps.append(_run_metadata(ctx, paths, on_progress))
 
     if opts.skip_lychee:
-        report.steps.append(
-            StepResult(name="lychee (offline)", status=StepStatus.SKIP)
-        )
+        report.steps.append(StepResult(name="lychee", status=StepStatus.SKIP))
     else:
         lychee_bin = ctx.doc_lint_install_dir / "lychee"
         if lychee_bin.is_file():
-            report.steps.append(_run_lychee_offline(ctx, paths, on_progress))
+            report.steps.append(
+                _run_lychee(ctx, paths, on_progress, offline=opts.lychee_offline)
+            )
         else:
             report.steps.append(
                 StepResult(
-                    name="lychee (offline)",
+                    name="lychee",
                     status=StepStatus.FAIL,
                     detail="lychee not installed",
                 )
@@ -624,7 +627,7 @@ def run_check(
 
     _progress(on_progress, "Collecting findings…")
     findings = parse_all_lint_logs(ctx.lint_log_dir, paths)
-    lychee_report = ctx.repo_root / "lychee" / "report-offline.json"
+    lychee_report = _lychee_report_path(ctx, offline=opts.lychee_offline)
     if lychee_report.is_file() and not opts.skip_lychee:
         findings.extend(lychee.parse_report(lychee_report))
     findings.extend(_findings_for_unreported_tool_failures(ctx, paths, findings))

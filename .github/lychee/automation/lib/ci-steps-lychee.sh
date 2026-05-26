@@ -109,9 +109,46 @@ ci_lychee_report_reviewdog() {
     true
 }
 
+_ci_lychee_check_paths() {
+  local report="$1"
+  shift
+  local -a paths=("$@")
+  local lint_log="${CI_LINT_LOG_DIR:-lint-logs}"
+
+  if [ "${#paths[@]}" -eq 0 ]; then
+    echo "lychee: no paths" >&2
+    return 0
+  fi
+
+  lychee_install_cli
+  mkdir -p "$(dirname "${report}")"
+  set +e
+  lychee --config .lychee.toml --max-cache-age 1d --format json \
+    --no-progress --output "${report}" "${paths[@]}"
+  local lychee_exit=$?
+  echo "${lychee_exit}" >"${lint_log}/lychee.exit" 2>/dev/null || true
+
+  if [ ! -f "${report}" ]; then
+    echo "lychee: no report at ${report} (exit ${lychee_exit})" >&2
+    return 1
+  fi
+
+  local filter_exit=0
+  ci_lychee_filter_403 "${report}" || filter_exit=$?
+  echo "${filter_exit}" >"${lint_log}/lychee-filter.exit" 2>/dev/null || true
+  return "${filter_exit}"
+}
+
+# docs-dev / local: live HTTP checks (same as PR CI, without reviewdog).
+ci_lychee_docs_dev() {
+  _ci_lychee_check_paths "${LYCHEE_DOCS_DEV_REPORT:-lychee/report-docs-dev.json}" "$@"
+}
+
+# Cache-only: skips URLs that were never checked before (fast, incomplete).
 ci_lychee_offline() {
   local -a paths=("$@")
   local report="${LYCHEE_OFFLINE_REPORT:-lychee/report-offline.json}"
+  local lint_log="${CI_LINT_LOG_DIR:-lint-logs}"
 
   if [ "${#paths[@]}" -eq 0 ]; then
     echo "lychee offline: no paths" >&2
@@ -125,7 +162,7 @@ ci_lychee_offline() {
     --output "${report}" "${paths[@]}"
   local lychee_exit=$?
   set -e
-  echo "${lychee_exit}" >"${CI_LINT_LOG_DIR:-lint-logs}/lychee.exit" 2>/dev/null || true
+  echo "${lychee_exit}" >"${lint_log}/lychee.exit" 2>/dev/null || true
 
   if [ ! -f "${report}" ]; then
     echo "lychee offline: no report at ${report} (exit ${lychee_exit})" >&2
@@ -140,23 +177,8 @@ ci_lychee_pr() {
     mapfile -t paths < <(find docs -type f -name '*.md' | sort)
   fi
 
-  lychee_install_cli
-  mkdir -p lychee
-  set +e
-  lychee --config .lychee.toml --max-cache-age 1d --format json \
-    --output lychee/report.json --no-progress "${paths[@]}"
-  local lychee_exit=$?
-  echo "${lychee_exit}" >"${CI_LINT_LOG_DIR:-lint-logs}/lychee.exit" 2>/dev/null || true
-
-  if [ ! -f lychee/report.json ]; then
-    echo "lychee did not produce lychee/report.json" >&2
-    return 1
-  fi
-
   local filter_exit=0
-  ci_lychee_filter_403 lychee/report.json || filter_exit=$?
-  echo "${filter_exit}" >"${CI_LINT_LOG_DIR:-lint-logs}/lychee-filter.exit" 2>/dev/null || true
-
+  _ci_lychee_check_paths "lychee/report.json" "${paths[@]}" || filter_exit=$?
   ci_lychee_report_reviewdog lychee/report.json || true
   return "${filter_exit}"
 }

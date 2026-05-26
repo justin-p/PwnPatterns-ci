@@ -101,6 +101,13 @@ def main(
         bool, typer.Option("--fix", help="Apply typos/rumdl/shfmt fixes, then re-check")
     ] = False,
     skip_lychee: Annotated[bool, typer.Option("--skip-lychee")] = False,
+    lychee_offline: Annotated[
+        bool,
+        typer.Option(
+            "--lychee-offline",
+            help="Only check URLs already in lychee cache (skips never-seen links)",
+        ),
+    ] = False,
     skip_actionlint: Annotated[bool, typer.Option("--skip-actionlint")] = False,
     skip_prek: Annotated[
         bool,
@@ -125,6 +132,7 @@ def main(
         changed=changed,
         fix=fix,
         skip_lychee=skip_lychee,
+        lychee_offline=lychee_offline,
         skip_actionlint=skip_actionlint,
         skip_prek=skip_prek,
     )

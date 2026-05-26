@@ -47,11 +47,11 @@ def test_failure_summary_lists_failed_steps() -> None:
         steps=[
             StepResult(name="prose lint", status=StepStatus.FAIL),
             StepResult(
-                name="lychee (offline)",
+                name="lychee",
                 status=StepStatus.FAIL,
-                detail="3 cached link error(s)",
+                detail="3 broken link(s)",
             ),
         ]
     )
     assert report.passed is False
-    assert report.failure_summary() == "prose lint, lychee (offline) (3 cached link error(s))"
+    assert report.failure_summary() == "prose lint, lychee (3 broken link(s))"
