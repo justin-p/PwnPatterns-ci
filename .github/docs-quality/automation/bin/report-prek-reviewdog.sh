@@ -3,8 +3,9 @@
 set -euo pipefail
 
 reporter="${1:?reviewdog reporter required (e.g. github-pr-review)}"
-exit_file="${2:-lint-logs/prek.exit}"
-log_file="${3:-lint-logs/prek.log}"
+lint_log_dir="${CI_LINT_LOG_DIR:-lint-logs}"
+exit_file="${2:-${lint_log_dir}/prek.exit}"
+log_file="${3:-${lint_log_dir}/prek.log}"
 
 fail_level="error"
 filter_mode="file"

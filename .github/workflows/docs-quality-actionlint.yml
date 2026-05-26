@@ -71,7 +71,7 @@ jobs:
             source "${DOCS_QUALITY_DIR}/automation/lib/reviewdog-shellcheck.sh"
             reviewdog_shellcheck_gcc lint-logs/shellcheck.txt shellcheck \
               -reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}" \
-              -fail-level=error -filter-mode=file
+              -fail-level=warning -filter-mode=file
           fi
 
       - name: Check shfmt

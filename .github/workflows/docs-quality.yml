@@ -126,9 +126,10 @@ jobs:
       - name: Run linters in parallel
         if: steps.targets.outputs.skip != 'true'
         run: |
+          mkdir -p "${GITHUB_WORKSPACE}/lint-logs"
           export DOC_PATHS="$(bash "${DOCS_QUALITY_DIR}/automation/bin/load-doc-paths.sh" "${{ steps.targets.outputs.paths }}")"
           uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
-            pwnpatterns-ci ci lint-prose lint-logs
+            pwnpatterns-ci ci lint-prose "${GITHUB_WORKSPACE}/lint-logs"
 
       - uses: reviewdog/action-setup@d8a7baabd7f3e8544ee4dbde3ee41d0011c3a93f # v1.5.0
         if: steps.targets.outputs.skip != 'true'
@@ -137,13 +138,15 @@ jobs:
         if: steps.targets.outputs.skip != 'true'
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
+          LINT_LOG_DIR: ${{ github.workspace }}/lint-logs
         run: |
-          set -euo pipefail
+          set -eu
           reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}"
           for tool in vale typos textlint rumdl harper languagetool; do
-            if [ -s "lint-logs/${tool}.json" ]; then
+            log="${LINT_LOG_DIR}/${tool}.json"
+            if [ -s "${log}" ] && jq -e . "${log}" >/dev/null 2>&1; then
               uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
-                pwnpatterns-ci ci prose-to-rdjsonl "${tool}" lint-logs \
+                pwnpatterns-ci ci prose-to-rdjsonl "${tool}" "${LINT_LOG_DIR}" \
                 | reviewdog -f=rdjsonl -name="${tool}" \
                   -reporter="${reporter}" -fail-level=error -filter-mode=file || true
             fi
@@ -156,7 +159,7 @@ jobs:
           REPO_ROOT: ${{ github.workspace }}
         run: |
           set -euo pipefail
-          mkdir -p lint-logs
+          mkdir -p "${GITHUB_WORKSPACE}/lint-logs"
           mapfile -t paths < <(bash "${DOCS_QUALITY_DIR}/automation/bin/load-doc-paths.sh" "${{ steps.targets.outputs.paths }}")
           if [ "${{ steps.targets.outputs.scan_mode }}" = "all" ]; then
             mapfile -t paths < <(find docs -type f -name '*.md' | sort)
@@ -164,50 +167,53 @@ jobs:
           set +e
           uv run --directory "${DOCS_QUALITY_DIR}/tools/verify-metadata" \
             python verify_metadata.py --rdjsonl "${paths[@]}" \
-            >lint-logs/metadata.rdjsonl 2>lint-logs/metadata.stderr
-          echo "$?" >lint-logs/metadata.exit
+            >"${GITHUB_WORKSPACE}/lint-logs/metadata.rdjsonl" 2>"${GITHUB_WORKSPACE}/lint-logs/metadata.stderr"
+          echo "$?" >"${GITHUB_WORKSPACE}/lint-logs/metadata.exit"
           set -e
           uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
-            pwnpatterns-ci ci record-exits lint-logs
+            pwnpatterns-ci ci record-exits "${GITHUB_WORKSPACE}/lint-logs"
 
       - name: Report metadata (reviewdog)
         if: steps.targets.outputs.skip != 'true'
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
         run: |
-          if [ -s lint-logs/metadata.rdjsonl ]; then
+          if [ -s "${GITHUB_WORKSPACE}/lint-logs/metadata.rdjsonl" ]; then
             reviewdog -f=rdjsonl -name=metadata \
               -reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}" \
-              -fail-level=error -filter-mode=file <lint-logs/metadata.rdjsonl || true
+              -fail-level=error -filter-mode=file \
+              <"${GITHUB_WORKSPACE}/lint-logs/metadata.rdjsonl" || true
           fi
-
-      - name: Fail on content linters
-        if: steps.targets.outputs.skip != 'true'
-        run: |
-          uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
-            pwnpatterns-ci ci report-failures lint-logs
 
       - name: Run prek
         if: steps.targets.outputs.skip != 'true'
         continue-on-error: true
         run: |
+          mkdir -p "${GITHUB_WORKSPACE}/lint-logs"
           set +e
-          prek run --all-files --show-diff-on-failure 2>&1 | tee lint-logs/prek.log
-          echo "${PIPESTATUS[0]}" >lint-logs/prek.exit
+          prek run --all-files --show-diff-on-failure 2>&1 | tee "${GITHUB_WORKSPACE}/lint-logs/prek.log"
+          echo "${PIPESTATUS[0]}" >"${GITHUB_WORKSPACE}/lint-logs/prek.exit"
           set -e
 
       - name: Report prek (reviewdog)
         if: steps.targets.outputs.skip != 'true'
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
+          CI_LINT_LOG_DIR: ${{ github.workspace }}/lint-logs
         run: |
           reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}"
           bash "${DOCS_QUALITY_DIR}/automation/bin/report-prek-reviewdog.sh" "${reporter}"
 
+      - name: Fail on content linters
+        if: steps.targets.outputs.skip != 'true'
+        run: |
+          uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
+            pwnpatterns-ci ci report-failures "${GITHUB_WORKSPACE}/lint-logs"
+
       - name: Fail on prek
         if: steps.targets.outputs.skip != 'true'
         run: |
-          if [ -f lint-logs/prek.exit ] && [ "$(cat lint-logs/prek.exit)" -ne 0 ]; then
-            cat lint-logs/prek.log 2>/dev/null || true
+          if [ -f "${GITHUB_WORKSPACE}/lint-logs/prek.exit" ] && [ "$(cat "${GITHUB_WORKSPACE}/lint-logs/prek.exit")" -ne 0 ]; then
+            cat "${GITHUB_WORKSPACE}/lint-logs/prek.log" 2>/dev/null || true
             exit 1
           fi

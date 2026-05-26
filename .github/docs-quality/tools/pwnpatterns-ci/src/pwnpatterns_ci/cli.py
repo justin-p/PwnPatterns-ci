@@ -60,19 +60,21 @@ def cmd_lint_prose(
         _, paths, skip = doc_targets(layout)
         if skip or not paths:
             raise typer.Exit("no paths to lint")
-    lint_prose(layout, paths, log_dir.resolve())
+    lint_prose(layout, paths, layout.resolve_log_dir(log_dir))
 
 
 @ci_app.command("record-exits")
 def cmd_record_exits(log_dir: Path = typer.Argument(Path("lint-logs"))) -> None:
     from pwnpatterns_ci.report import record_lint_exits
 
-    record_lint_exits(log_dir.resolve())
+    layout = _layout()
+    record_lint_exits(layout.resolve_log_dir(log_dir))
 
 
 @ci_app.command("report-failures")
 def cmd_report_failures(log_dir: Path = typer.Argument(Path("lint-logs"))) -> None:
-    raise typer.Exit(report_failures(log_dir.resolve()))
+    layout = _layout()
+    raise typer.Exit(report_failures(layout.resolve_log_dir(log_dir)))
 
 
 @ci_app.command("verify-pin")
@@ -106,7 +108,8 @@ def cmd_prose_to_rdjsonl(
     sh = layout.automation_dir / "bin" / "prose-to-rdjsonl.sh"
     if not sh.is_file():
         raise typer.Exit(f"missing {sh}")
-    subprocess.run(["bash", str(sh), tool, str(log_dir)], check=True)
+    resolved = layout.resolve_log_dir(log_dir)
+    subprocess.run(["bash", str(sh), tool, str(resolved)], check=True)
 
 
 @ci_app.command("sync-allowlists")

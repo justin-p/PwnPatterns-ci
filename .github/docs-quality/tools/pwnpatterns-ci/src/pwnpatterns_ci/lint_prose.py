@@ -182,6 +182,12 @@ def lint_prose(layout: Layout, paths: list[str], log_dir: Path) -> None:
             cwd=textlint_cfg,
             empty_json="[]",
         )
+        textlint_log = log_dir / "textlint.json"
+        if textlint_log.is_file() and textlint_log.stat().st_size:
+            try:
+                json.loads(textlint_log.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                textlint_log.write_text("[]", encoding="utf-8")
 
     def rumdl() -> None:
         _run(

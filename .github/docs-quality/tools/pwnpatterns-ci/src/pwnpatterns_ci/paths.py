@@ -83,3 +83,9 @@ class Layout:
             return path.resolve().relative_to(self.repo_root.resolve()).as_posix()
         except ValueError:
             return path.as_posix()
+
+    def resolve_log_dir(self, log_dir: Path) -> Path:
+        """Resolve lint log dir under the consumer repo, not uv's project cwd."""
+        if log_dir.is_absolute():
+            return log_dir.resolve()
+        return (self.repo_root / log_dir).resolve()
