@@ -21,6 +21,9 @@ class DocsDevApp(App):
     #: Re-lint the current file after allowlist + sync (shared by Check All / Changed).
     auto_refresh_after_allowlist: bool = True
 
+    #: Regenerate Vale/Harper/Typos/Textlint allowlist artifacts after allowlisting from TUI.
+    auto_sync_after_allowlist: bool = True
+
     def get_system_commands(self, screen: Screen) -> Iterable[SystemCommand]:
         yield from super().get_system_commands(screen)
         yield from iter_docs_dev_commands(self, screen)

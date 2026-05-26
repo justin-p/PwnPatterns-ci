@@ -420,6 +420,181 @@ async def test_allowlist_auto_refresh_toggle_skips_rescan(monkeypatch) -> None:
         )
 
 
+async def test_allowlist_auto_sync_toggle_skips_sync(monkeypatch) -> None:
+    """When auto-sync-after-allowlist is off, sync_allowlists isn't called."""
+    from docs_dev.models import (
+        CheckReport,
+        FileFindings,
+        Finding,
+        StepResult,
+        StepStatus,
+    )
+
+    doc = "docs/example.md"
+
+    def mock_check(_ctx, _opts, **_kwargs):
+        return CheckReport(
+            steps=[StepResult("prose lint", StepStatus.FAIL)],
+            files=[
+                FileFindings(
+                    path=doc,
+                    findings=[
+                        Finding(
+                            tool="vale",
+                            path=doc,
+                            line=10,
+                            column=1,
+                            severity="error",
+                            message="Use 'Prometheus' instead of 'prometheus'.",
+                            rule="Vale.Terms",
+                        )
+                    ],
+                )
+            ],
+        )
+
+    prose_calls: list[list[str]] = []
+
+    def mock_prose(_ctx, paths, **_kwargs):
+        prose_calls.append(list(paths))
+        return []
+
+    def mock_add_term(_ctx, term, *, finding=None):
+        return True, f"Added '{term}'"
+
+    sync_calls: list[bool] = []
+
+    def mock_sync(_ctx):
+        sync_calls.append(True)
+        return 0
+
+    monkeypatch.setattr(
+        "docs_dev.tui.screens.check_screen.run_check", mock_check
+    )
+    monkeypatch.setattr(
+        "docs_dev.tui.screens.check_screen.run_prose_lint", mock_prose
+    )
+    monkeypatch.setattr(
+        "docs_dev.tui.screens.check_screen.add_term", mock_add_term
+    )
+    monkeypatch.setattr(
+        "docs_dev.tui.screens.check_screen.sync_allowlists", mock_sync
+    )
+
+    app = DocsDevTestApp()
+
+    async with app.run_test(size=(120, 52)) as pilot:
+        await pilot.pause()
+        await _click_home_button(pilot, app, "check")
+
+        check = app.screen
+        assert isinstance(check, CheckScreen)
+
+        app.auto_refresh_after_allowlist = False
+        check.query_one("#auto-refresh-after-allowlist", Checkbox).value = False
+
+        app.auto_sync_after_allowlist = False
+        check.query_one("#auto-sync-after-allowlist", Checkbox).value = False
+
+        await _activate_button(pilot, check.query_one("#run", Button))
+        await _wait_check_summary(pilot)
+
+        await _activate_button(pilot, check.query_one("#allowlist", Button))
+
+        deadline = time.monotonic() + 8.0
+        while time.monotonic() < deadline:
+            if not check._worker_busy():
+                break
+            await pilot.pause(0.05)
+
+        assert prose_calls == []
+        assert sync_calls == []
+        assert check._report is not None
+        assert all(ff.path != doc for ff in check._report.files)
+
+
+async def test_sync_allowlists_button_refreshes_selected_file(monkeypatch):
+    """Sync allowlists via toolbar button and refresh the selected file."""
+    from docs_dev.models import (
+        CheckReport,
+        FileFindings,
+        Finding,
+        StepResult,
+        StepStatus,
+    )
+
+    doc = "docs/example.md"
+
+    def mock_check(_ctx, _opts, **_kwargs):
+        return CheckReport(
+            steps=[StepResult("prose lint", StepStatus.FAIL)],
+            files=[
+                FileFindings(
+                    path=doc,
+                    findings=[
+                        Finding(
+                            tool="vale",
+                            path=doc,
+                            line=10,
+                            column=1,
+                            severity="error",
+                            message="Use 'Prometheus' instead of 'prometheus'.",
+                            rule="Vale.Terms",
+                        )
+                    ],
+                )
+            ],
+        )
+
+    prose_calls: list[list[str]] = []
+
+    def mock_prose(_ctx, paths, **_kwargs):
+        prose_calls.append(list(paths))
+        return []
+
+    def mock_sync(_ctx):
+        return 0
+
+    monkeypatch.setattr(
+        "docs_dev.tui.screens.check_screen.run_check", mock_check
+    )
+    monkeypatch.setattr(
+        "docs_dev.tui.screens.check_screen.run_prose_lint", mock_prose
+    )
+    monkeypatch.setattr(
+        "docs_dev.tui.screens.check_screen.sync_allowlists", mock_sync
+    )
+
+    app = DocsDevTestApp()
+
+    async with app.run_test(size=(120, 52)) as pilot:
+        await pilot.pause()
+        await _click_home_button(pilot, app, "check")
+
+        check = app.screen
+        assert isinstance(check, CheckScreen)
+
+        await _activate_button(pilot, check.query_one("#run", Button))
+        await _wait_check_summary(pilot)
+
+        assert check._current_file is not None
+        assert check._current_file.path == doc
+
+        sync_btn = check.query_one("#sync-allowlists", Button)
+        assert not sync_btn.disabled
+        await _activate_button(pilot, sync_btn)
+
+        deadline = time.monotonic() + 8.0
+        while time.monotonic() < deadline:
+            if not check._worker_busy():
+                break
+            await pilot.pause(0.05)
+
+        assert prose_calls == [[doc]]
+        assert check._report is not None
+        assert all(ff.path != doc for ff in check._report.files)
+
+
 async def test_check_screen_editor_jumps_to_finding_line(
     monkeypatch, tmp_path: Path
 ) -> None:

@@ -93,6 +93,7 @@ class CheckScreen(Screen):
         self._report = None
         self._check_worker = None
         self._allowlist_worker = None
+        self._sync_worker = None
         self._file_lint_worker = None
         self._path_by_row: dict[str, str] = {}
         self._finding_by_row: dict[str, Finding] = {}
@@ -116,8 +117,16 @@ class CheckScreen(Screen):
             yield Button("Fix  [f]", id="fix", variant="warning")
             yield Button("Allowlist  [a]", id="allowlist", variant="success")
             yield Checkbox(
+                "Auto sync allowlists",
+                id="auto-sync-after-allowlist",
+            )
+            yield Checkbox(
                 "Refresh after allowlist",
                 id="auto-refresh-after-allowlist",
+            )
+            yield Button(
+                "Sync allowlists",
+                id="sync-allowlists",
             )
             yield Button("Recheck file  [c]", id="recheck-file")
             yield Button("Home  [h]", id="home")
@@ -175,6 +184,10 @@ class CheckScreen(Screen):
         register_bearded_editor_theme(editor)
         editor.load_text("")
         self._set_editor_panel_visible(False)
+
+        self.query_one("#auto-sync-after-allowlist", Checkbox).value = (
+            self._auto_sync_after_allowlist()
+        )
         self.query_one("#auto-refresh-after-allowlist", Checkbox).value = (
             self._auto_refresh_after_allowlist()
         )
@@ -193,6 +206,9 @@ class CheckScreen(Screen):
 
     def _auto_refresh_after_allowlist(self) -> bool:
         return bool(getattr(self.app, "auto_refresh_after_allowlist", True))
+
+    def _auto_sync_after_allowlist(self) -> bool:
+        return bool(getattr(self.app, "auto_sync_after_allowlist", True))
 
     def _findings_for_path(self, path: str) -> list[Finding]:
         if self._current_file is not None and self._current_file.path == path:
@@ -219,15 +235,19 @@ class CheckScreen(Screen):
             return True
         if self._allowlist_worker is not None and self._allowlist_worker.is_running:
             return True
+        if self._sync_worker is not None and self._sync_worker.is_running:
+            return True
         return self._file_lint_worker is not None and self._file_lint_worker.is_running
 
     def _update_toolbar_buttons(self) -> None:
         self._update_allowlist_button()
         self._update_open_editor_button()
         recheck_btn = self.query_one("#recheck-file", Button)
+        sync_btn = self.query_one("#sync-allowlists", Button)
         path = self._selected_file_path_for_lint()
         busy = self._worker_busy()
         recheck_btn.disabled = path is None or busy or self._report is None
+        sync_btn.disabled = busy
         if path:
             short = display_path(path, self._ctx.repo_root)
             if len(short) > 36:
@@ -301,6 +321,8 @@ class CheckScreen(Screen):
             self.action_fix()
         elif event.button.id == "allowlist":
             self.action_allowlist_term()
+        elif event.button.id == "sync-allowlists":
+            self.action_sync_allowlists()
         elif event.button.id == "recheck-file":
             self.action_recheck_file()
         elif event.button.id == "open-editor":
@@ -311,10 +333,55 @@ class CheckScreen(Screen):
             self.action_back()
 
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
-        if event.checkbox.id != "auto-refresh-after-allowlist":
-            return
-        if hasattr(self.app, "auto_refresh_after_allowlist"):
+        if event.checkbox.id == "auto-refresh-after-allowlist":
             self.app.auto_refresh_after_allowlist = event.value
+            return
+        if event.checkbox.id == "auto-sync-after-allowlist":
+            self.app.auto_sync_after_allowlist = event.value
+            return
+
+    def action_sync_allowlists(self) -> None:
+        path = self._selected_file_path_for_lint()
+        if path is None and self._report is None:
+            # No selection yet (should be rare); still sync allowlists.
+            path = None
+
+        if self._worker_busy():
+            return
+
+        self.notify("Syncing allowlists…", timeout=3)
+        self.query_one("#check-progress", RichLog).clear()
+        self._set_progress_log_visible(True)
+        if path:
+            self._append_progress(
+                f"Syncing allowlists for {display_path(path, self._ctx.repo_root)}…"
+            )
+        else:
+            self._append_progress("Syncing allowlists…")
+        self._update_toolbar_buttons()
+
+        def work() -> tuple[bool, str, str | None, list[Finding]]:
+            rc = sync_allowlists(self._ctx)
+            if rc != 0:
+                return False, f"sync_allowlists exited {rc}", path, []
+            if path is None:
+                return True, "Synced allowlists.", None, []
+            findings = run_prose_lint(
+                self._ctx,
+                [path],
+                on_progress=lambda m: self.app.call_from_thread(
+                    self._append_progress, m
+                ),
+            )
+            return True, "Synced allowlists and refreshed lint.", path, findings
+
+        self._sync_worker = self.run_worker(
+            lambda: work(),
+            thread=True,
+            exclusive=True,
+            name="sync-allowlists",
+        )
+        self._update_toolbar_buttons()
 
     def action_help(self) -> None:
         self.notify(
@@ -528,13 +595,27 @@ class CheckScreen(Screen):
         file_path = self._current_file.path if self._current_file else None
         self.notify(f"Adding '{term}' to allowlist…", timeout=3)
 
-        def work() -> tuple[bool, str, str | None, list[Finding], str | None, bool]:
+        def work() -> tuple[
+            bool, str, str | None, list[Finding], str | None, bool, bool
+        ]:
             added, msg = add_term(self._ctx, term, finding=finding)
             if not added:
-                return False, msg, file_path, [], term, False
-            rc = sync_allowlists(self._ctx)
-            if rc != 0:
-                return False, f"{msg}; sync exited {rc}", file_path, [], term, False
+                return False, msg, file_path, [], term, False, False
+
+            did_sync = self._auto_sync_after_allowlist()
+            if did_sync:
+                rc = sync_allowlists(self._ctx)
+                if rc != 0:
+                    return (
+                        False,
+                        f"{msg}; sync exited {rc}",
+                        file_path,
+                        [],
+                        term,
+                        False,
+                        False,
+                    )
+
             findings: list[Finding] = []
             refresh = self._auto_refresh_after_allowlist()
             did_rescan = refresh and file_path is not None
@@ -546,8 +627,13 @@ class CheckScreen(Screen):
                         self._append_progress, m
                     ),
                 )
-            done = f"{msg}. Re-scanned file." if did_rescan else f"{msg}."
-            return True, done, file_path, findings, term, did_rescan
+            if did_rescan:
+                done = f"{msg}. Re-scanned file."
+            else:
+                done = f"{msg}."
+            if not did_sync:
+                done += " (sync skipped)."
+            return True, done, file_path, findings, term, did_rescan, did_sync
 
         self._allowlist_worker = self.run_worker(
             lambda: work(),
@@ -624,7 +710,15 @@ class CheckScreen(Screen):
             self._allowlist_worker = None
             self._update_toolbar_buttons()
             try:
-                ok, msg, file_path, findings, term, did_rescan = event.worker.result
+                (
+                    ok,
+                    msg,
+                    file_path,
+                    findings,
+                    term,
+                    did_rescan,
+                    _did_sync,
+                ) = event.worker.result
             except Exception as exc:
                 self.notify(f"Allowlist failed: {exc}", severity="error", timeout=8)
                 return
@@ -641,6 +735,29 @@ class CheckScreen(Screen):
                             casing=casing,
                         )
                         self._apply_file_rescan(file_path, remaining)
+            else:
+                self.notify(msg, severity="warning", timeout=8)
+            if self._check_worker is None or not self._check_worker.is_running:
+                self._set_progress_log_visible(False)
+            return
+
+        sync_worker = getattr(self, "_sync_worker", None)
+        if (
+            sync_worker is not None
+            and event.worker == sync_worker
+            and event.worker.is_finished
+        ):
+            self._sync_worker = None
+            self._update_toolbar_buttons()
+            try:
+                ok, msg, file_path, findings = event.worker.result
+            except Exception as exc:
+                self.notify(f"Sync failed: {exc}", severity="error", timeout=8)
+                return
+            if ok:
+                self.notify(msg, title="Sync allowlists", timeout=8)
+                if file_path is not None:
+                    self._apply_file_rescan(file_path, findings)
             else:
                 self.notify(msg, severity="warning", timeout=8)
             if self._check_worker is None or not self._check_worker.is_running:
