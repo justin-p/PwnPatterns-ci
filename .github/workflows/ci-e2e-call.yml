@@ -1,0 +1,32 @@
+# Platform repo: exercise the consumer ci-e2e reusable workflow on each PR/push.
+name: CI E2E (platform)
+
+on:
+  pull_request:
+    paths:
+      - '.github/**'
+      - 'scripts/**'
+      - 'renovate.json'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/**'
+      - 'scripts/**'
+      - 'renovate.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-e2e-platform-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: CI machinery E2E
+    uses: ./.github/workflows/ci-e2e.yml
+    with:
+      platform_ref: ${{ github.event.pull_request.head.sha || github.sha }}
+    secrets: inherit

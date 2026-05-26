@@ -1,0 +1,54 @@
+# Platform repo CI for Python tools under .github/docs-quality/tools (no consumer layout).
+name: Docs quality tools
+
+on:
+  pull_request:
+    paths:
+      - '.github/docs-quality/tools/**'
+      - '.github/docs-quality/config/manifest.env'
+      - '.github/tests/**'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/docs-quality/tools/**'
+      - '.github/docs-quality/config/manifest.env'
+      - '.github/tests/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-quality-tools-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  REPO_ROOT: ${{ github.workspace }}
+  DOCS_QUALITY_DIR: ${{ github.workspace }}/.github/docs-quality
+
+jobs:
+  test:
+    name: Tool unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+
+      - name: docs-dev pytest
+        run: uv run --directory "${DOCS_QUALITY_DIR}/tools/docs-dev" pytest -q --tb=short
+
+      - name: sync-allowlists pytest
+        run: uv run --directory "${DOCS_QUALITY_DIR}/tools/sync-allowlists" pytest -q --tb=short
+
+      - name: verify-metadata pytest
+        run: uv run --directory "${DOCS_QUALITY_DIR}/tools/verify-metadata" pytest -q --tb=short
+
+      - name: pwnpatterns-ci pytest
+        run: uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" pytest -q --tb=short
+
+      - name: grammar-routing pytest
+        run: uv run --directory "${DOCS_QUALITY_DIR}/tools/grammar-routing" pytest -q --tb=short
+
+      - name: Component tests
+        run: bash .github/tests/run-component-tests.sh
