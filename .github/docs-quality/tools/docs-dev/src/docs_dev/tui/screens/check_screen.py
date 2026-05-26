@@ -116,7 +116,12 @@ class CheckScreen(Screen):
                     yield DataTable(id="files", zebra_stripes=True, cursor_type="row")
                 with Vertical(id="detail-panel"):
                     yield DataTable(id="findings", zebra_stripes=True, cursor_type="row")
-                    yield Static("", id="finding-message", classes="muted")
+                    yield Static(
+                        "",
+                        id="finding-message",
+                        classes="muted",
+                        markup=False,
+                    )
                     with Horizontal(id="detail-actions"):
                         yield Button(
                             "Open at line  [e]",
