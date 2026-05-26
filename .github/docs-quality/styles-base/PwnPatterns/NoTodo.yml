@@ -1,0 +1,7 @@
+extends: existence
+message: "Avoid TODO/FIXME in documentation."
+level: error
+scope: text
+tokens:
+  - '\bTODO\b'
+  - '\bFIXME\b'

@@ -1,0 +1,19 @@
+{
+  "errors": 2,
+  "error_map": {
+    "docs/webapp/general/example.md": [
+      {
+        "url": "https://example.com/broken",
+        "status": { "code": 404, "text": "404 Not Found" },
+        "span": { "line": 10, "column": 5 }
+      },
+      {
+        "url": "https://www.cloudflare.com/datacenter-blocked",
+        "status": { "code": 403, "text": "403 Forbidden" },
+        "span": { "line": 12, "column": 1 }
+      }
+    ]
+  },
+  "timeout_map": {},
+  "fail_map": {}
+}

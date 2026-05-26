@@ -1,0 +1,4 @@
+# ShellCheck defaults for .github/**/*.sh (see automation/bin/lint-shell.sh).
+external-sources=true
+# Runtime paths use DOCS_QUALITY_DIR from lib/env.sh.
+disable=SC1091

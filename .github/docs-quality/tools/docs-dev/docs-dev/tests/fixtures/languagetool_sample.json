@@ -1,0 +1,27 @@
+[
+  {
+    "file": "docs/example/nl_pattern.md",
+    "language": "nl",
+    "matches": [
+      {
+        "message": "Mogelijke spelfout gevonden.",
+        "offset": 10,
+        "length": 5,
+        "line": 2,
+        "column": 11,
+        "end_line": 2,
+        "end_column": 16,
+        "context": {
+          "text": "fout ",
+          "offset": 0,
+          "length": 5
+        },
+        "rule": {
+          "id": "MORFOLOGIK_RULE_NL_NL",
+          "issueType": "misspelling"
+        },
+        "replacements": [{ "value": "fouten" }]
+      }
+    ]
+  }
+]

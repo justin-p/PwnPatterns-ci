@@ -1,0 +1,207 @@
+# Reusable documentation quality workflow (platform: ocd-nl/pwnpatterns-ci).
+name: Documentation quality (platform)
+
+on:
+  workflow_call:
+    inputs:
+      platform_ref:
+        description: ocd-nl/pwnpatterns-ci commit SHA (must match workflow uses pin)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+env:
+  REPO_ROOT: ${{ github.workspace }}
+  DOCS_QUALITY_DIR: ${{ github.workspace }}/.github/pwnpatterns-ci/.github/docs-quality
+  CONSUMER_CONFIG_DIR: ${{ github.workspace }}/.github/docs-quality/config
+  DOC_LINT_INSTALL_DIR: /tmp/doc-linters
+
+jobs:
+  lint:
+    name: Lint documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          repository: ocd-nl/pwnpatterns-ci
+          ref: ${{ inputs.platform_ref }}
+          path: .github/pwnpatterns-ci
+
+      - name: Load manifest
+        run: |
+          set -euo pipefail
+          manifest="${DOCS_QUALITY_DIR}/config/manifest.env"
+          grep -vE '^\s*(#|$)' "${manifest}" >> "${GITHUB_ENV}"
+          if [ -f "${CONSUMER_CONFIG_DIR}/harper.ignore-rules" ]; then
+            {
+              echo "HARPER_IGNORE_RULES<<EOF"
+              grep -vE '^\s*(#|$)' "${CONSUMER_CONFIG_DIR}/harper.ignore-rules" | paste -sd, -
+              echo "EOF"
+            } >> "${GITHUB_ENV}"
+          fi
+          echo "HARPER_USER_DICT=${GITHUB_WORKSPACE}/.github/docs-quality/generated/harper-dictionary.txt" >> "${GITHUB_ENV}"
+
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+
+      - name: Documentation targets
+        id: targets
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GITHUB_EVENT_PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
+            pwnpatterns-ci ci doc-targets
+
+      - name: Stop when no documentation targets
+        if: steps.targets.outputs.skip == 'true'
+        run: echo "No documentation files to lint for this event."
+
+      - name: Sync allowlists
+        if: steps.targets.outputs.skip != 'true'
+        run: |
+          uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
+            pwnpatterns-ci ci sync-allowlists
+
+      - name: Restore Vale styles cache
+        if: steps.targets.outputs.skip != 'true'
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: |
+            styles/Google
+            styles/Microsoft
+            styles/write-good
+            styles/alex
+          key: vale-styles-v1-${{ hashFiles('.vale.ini') }}
+          restore-keys: vale-styles-v1-
+
+      - name: Install prek
+        if: steps.targets.outputs.skip != 'true'
+        run: uv tool install prek
+
+      - name: Prepare Harper dictionaries
+        if: steps.targets.outputs.skip != 'true'
+        run: |
+          mkdir -p "${HOME}/.config/harper-ls" "${HOME}/.local/share/harper-ls/file_dictionaries"
+          touch "${HOME}/.config/harper-ls/dictionary.txt"
+
+      - name: Install documentation linters
+        if: steps.targets.outputs.skip != 'true'
+        run: |
+          uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
+            pwnpatterns-ci ci install-linters
+
+      - name: Sync Vale packages
+        if: steps.targets.outputs.skip != 'true'
+        run: |
+          uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
+            pwnpatterns-ci ci vale-sync
+
+      - name: Save Vale styles cache
+        if: steps.targets.outputs.skip != 'true'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: |
+            styles/Google
+            styles/Microsoft
+            styles/write-good
+            styles/alex
+          key: vale-styles-v1-${{ hashFiles('.vale.ini') }}
+
+      - name: Run linters in parallel
+        if: steps.targets.outputs.skip != 'true'
+        env:
+          DOC_PATHS: ${{ steps.targets.outputs.paths }}
+        run: |
+          uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
+            pwnpatterns-ci ci lint-prose lint-logs
+
+      - uses: reviewdog/action-setup@d8a7baabd7f3e8544ee4dbde3ee41d0011c3a93f # v1.5.0
+        if: steps.targets.outputs.skip != 'true'
+
+      - name: Report prose linters (reviewdog)
+        if: steps.targets.outputs.skip != 'true'
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}"
+          for tool in vale typos rumdl harper languagetool; do
+            if [ -s "lint-logs/${tool}.json" ]; then
+              uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
+                pwnpatterns-ci ci prose-to-rdjsonl "${tool}" lint-logs \
+                | reviewdog -f=rdjsonl -name="${tool}" \
+                  -reporter="${reporter}" -fail-level=error -filter-mode=file || true
+            fi
+          done
+
+      - name: Verify pattern metadata
+        if: steps.targets.outputs.skip != 'true'
+        continue-on-error: true
+        env:
+          DOC_PATHS: ${{ steps.targets.outputs.paths }}
+        run: |
+          set -euo pipefail
+          mapfile -t paths < <(printf '%s\n' "${DOC_PATHS}")
+          if [ "${{ steps.targets.outputs.scan_mode }}" = "all" ]; then
+            mapfile -t paths < <(find docs -type f -name '*.md' | sort)
+          fi
+          set +e
+          uv run --directory "${DOCS_QUALITY_DIR}/tools/verify-metadata" \
+            python verify_metadata.py --rdjsonl "${paths[@]}" \
+            >lint-logs/metadata.rdjsonl 2>lint-logs/metadata.stderr
+          echo "$?" >lint-logs/metadata.exit
+          set -e
+          uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
+            pwnpatterns-ci ci record-exits lint-logs
+
+      - name: Report metadata (reviewdog)
+        if: steps.targets.outputs.skip != 'true'
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
+        run: |
+          if [ -s lint-logs/metadata.rdjsonl ]; then
+            reviewdog -f=rdjsonl -name=metadata \
+              -reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}" \
+              -fail-level=error -filter-mode=file <lint-logs/metadata.rdjsonl || true
+          fi
+
+      - name: Fail on content linters
+        if: steps.targets.outputs.skip != 'true'
+        run: |
+          uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
+            pwnpatterns-ci ci report-failures lint-logs
+
+      - name: Run prek
+        if: steps.targets.outputs.skip != 'true'
+        continue-on-error: true
+        run: |
+          set +e
+          prek run --all-files --show-diff-on-failure 2>&1 | tee lint-logs/prek.log
+          echo "${PIPESTATUS[0]}" >lint-logs/prek.exit
+          set -e
+
+      - name: Report prek (reviewdog)
+        if: steps.targets.outputs.skip != 'true'
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
+        run: |
+          reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}"
+          bash "${DOCS_QUALITY_DIR}/automation/bin/report-prek-reviewdog.sh" "${reporter}"
+
+      - name: Fail on prek
+        if: steps.targets.outputs.skip != 'true'
+        run: |
+          if [ -f lint-logs/prek.exit ] && [ "$(cat lint-logs/prek.exit)" -ne 0 ]; then
+            cat lint-logs/prek.log 2>/dev/null || true
+            exit 1
+          fi
+

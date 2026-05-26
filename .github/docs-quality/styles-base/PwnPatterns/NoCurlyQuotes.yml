@@ -1,0 +1,7 @@
+extends: existence
+message: "Use straight quotes instead of curly quotes."
+level: warning
+scope: text
+nonword: true
+tokens:
+  - '[“”‘’]'

@@ -1,0 +1,6 @@
+extends: occurrence
+message: "Too many commas in one sentence (max 4)."
+level: warning
+scope: sentence
+max: 4
+token: ','

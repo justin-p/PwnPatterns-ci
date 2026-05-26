@@ -1,0 +1,10 @@
+[
+  {
+    "file": "docs/webapp/general/sample.md",
+    "line": 2,
+    "column": 1,
+    "rule": "MD041",
+    "message": "First line should be a top-level heading",
+    "severity": "warning"
+  }
+]

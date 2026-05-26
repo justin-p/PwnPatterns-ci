@@ -1,0 +1,15 @@
+[project]
+name = "pwnpatterns-sync-allowlists"
+version = "0.0.0"
+description = "Regenerate docs-quality allowlist outputs from canonical sources"
+requires-python = ">=3.12"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = ["--strict-markers"]

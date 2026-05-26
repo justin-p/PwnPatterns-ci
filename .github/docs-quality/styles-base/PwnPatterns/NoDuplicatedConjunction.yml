@@ -1,0 +1,6 @@
+extends: existence
+message: "Do not start a sentence with a duplicated conjunction (e.g. 'And And')."
+level: warning
+scope: sentence
+tokens:
+  - '(?i)\b(And|But|Or|So|Yet|For|Nor)\s+\1\b'

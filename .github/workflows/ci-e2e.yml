@@ -1,0 +1,45 @@
+name: CI machinery E2E (platform)
+
+on:
+  workflow_call:
+    inputs:
+      platform_ref:
+        description: ocd-nl/pwnpatterns-ci commit SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: CI machinery E2E
+    runs-on: ubuntu-latest
+    env:
+      DOCS_QUALITY_DIR: ${{ github.workspace }}/.github/pwnpatterns-ci/.github/docs-quality
+      REPO_ROOT: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          repository: ocd-nl/pwnpatterns-ci
+          ref: ${{ inputs.platform_ref }}
+          path: .github/pwnpatterns-ci
+
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+
+      - name: Component tests
+        run: bash .github/pwnpatterns-ci/.github/tests/run-component-tests.sh
+
+      - name: Run CI E2E
+        env:
+          CI_REVIEWDOG_MODE: local
+          CI_E2E_SKIP_SYNC: "false"
+          CI_E2E_SKIP_PREK: "false"
+          DOC_LINT_INSTALL_DIR: /tmp/doc-linters
+        run: |
+          uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
+            pwnpatterns-ci ci run-e2e --job all --smoke-docs

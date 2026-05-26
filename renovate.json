@@ -1,0 +1,102 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits"],
+  "labels": ["dependencies", "upgrade"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/docs-quality/config/manifest.env/"],
+      "matchStrings": ["VALE_VERSION=(?<currentValue>[^\\s#]+)"],
+      "datasourceTemplate": "github-releases",
+      "packageNameTemplate": "errata-ai/vale",
+      "extractVersionTemplate": "^v?(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/docs-quality/config/manifest.env/"],
+      "matchStrings": ["TYPOS_VERSION=(?<currentValue>[^\\s#]+)"],
+      "datasourceTemplate": "github-releases",
+      "packageNameTemplate": "crate-ci/typos",
+      "extractVersionTemplate": "^v?(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/docs-quality/config/manifest.env/"],
+      "matchStrings": ["RUMDL_VERSION=(?<currentValue>[^\\s#]+)"],
+      "datasourceTemplate": "github-releases",
+      "packageNameTemplate": "rvben/rumdl",
+      "extractVersionTemplate": "^v?(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/docs-quality/config/manifest.env/"],
+      "matchStrings": ["HARPER_VERSION=(?<currentValue>[^\\s#]+)"],
+      "datasourceTemplate": "github-releases",
+      "packageNameTemplate": "Automattic/harper",
+      "extractVersionTemplate": "^v?(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/docs-quality/config/manifest.env/"],
+      "matchStrings": ["LANGUAGETOOL_VERSION=(?<currentValue>[^\\s#]+)"],
+      "datasourceTemplate": "github-releases",
+      "packageNameTemplate": "languagetool-org/languagetool",
+      "extractVersionTemplate": "^v?(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/docs-quality/config/manifest.env/"],
+      "matchStrings": ["SHELLCHECK_VERSION=(?<currentValue>[^\\s#]+)"],
+      "datasourceTemplate": "github-releases",
+      "packageNameTemplate": "koalaman/shellcheck",
+      "extractVersionTemplate": "^v?(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/docs-quality/config/manifest.env/"],
+      "matchStrings": ["SHFMT_VERSION=(?<currentValue>[^\\s#]+)"],
+      "datasourceTemplate": "github-releases",
+      "packageNameTemplate": "mvdan/sh",
+      "extractVersionTemplate": "^v?(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/docs-quality/config/manifest.env/"],
+      "matchStrings": ["REVIEWDOG_VERSION=(?<currentValue>[^\\s#]+)"],
+      "datasourceTemplate": "github-releases",
+      "packageNameTemplate": "reviewdog/reviewdog",
+      "extractVersionTemplate": "^v?(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/docs-quality/config/manifest.env/"],
+      "matchStrings": ["LYCHEE_VERSION=(?<currentValue>[^\\s#]+)"],
+      "datasourceTemplate": "github-releases",
+      "packageNameTemplate": "lycheeverse/lychee",
+      "extractVersionTemplate": "^lychee-v?(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/docs-quality/config/manifest.env/"],
+      "matchStrings": ["ACTIONLINT_VERSION=(?<currentValue>[^\\s#]+)"],
+      "datasourceTemplate": "github-releases",
+      "packageNameTemplate": "rhysd/actionlint",
+      "extractVersionTemplate": "^v?(?<version>.*)$"
+    }
+  ],
+  "postUpgradeTasks": [
+    {
+      "commands": [
+        "uv run --directory .github/docs-quality/tools/pwnpatterns-ci pwnpatterns-ci ci refresh-checksums"
+      ],
+      "fileFilters": [".github/docs-quality/config/manifest.env"],
+      "executionMode": "update"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["major", "minor", "patch"],
+      "automerge": false
+    }
+  ]
+}

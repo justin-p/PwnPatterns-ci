@@ -1,0 +1,16 @@
+{
+  "docs/example/sample.md": [
+    {
+      "Severity": "error",
+      "Check": "Vale.Terms",
+      "Message": "Use 'kerberos' instead of 'Kerberos'.",
+      "Line": 10
+    },
+    {
+      "Severity": "warning",
+      "Check": "write-good.Weasel",
+      "Message": "'several' is a weasel word!",
+      "Line": 11
+    }
+  ]
+}
