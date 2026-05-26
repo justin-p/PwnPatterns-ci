@@ -252,27 +252,31 @@ Footer {
     text-style: bold;
 }
 
-#check-progress-panel {
-    padding: 0 2;
+#summary-footer {
     height: auto;
-    max-height: 10;
+    padding: 0 2 1 2;
+    border-top: solid $border;
+    background: $surface;
 }
 
-#check-progress-panel.-hidden {
-    display: none;
-}
-
-#check-progress-status {
-    padding: 0 0 0 0;
+#summary-footer #summary {
+    padding: 0;
     height: auto;
+    border: none;
+    background: transparent;
 }
 
 #check-progress {
-    height: auto;
-    max-height: 7;
+    height: 3;
+    max-height: 3;
     border: solid $border;
     padding: 0 1;
-    background: $surface;
+    background: $panel;
+    margin-top: 0;
+}
+
+#check-progress.-hidden {
+    display: none;
 }
 
 #results-body {

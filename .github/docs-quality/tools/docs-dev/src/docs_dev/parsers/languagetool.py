@@ -21,6 +21,13 @@ def matched_text_from_match(match: dict) -> str:
     return text.strip()
 
 
+def _context_snippet(text: str, *, limit: int = 96) -> str:
+    stripped = text.strip()
+    if len(stripped) <= limit:
+        return stripped
+    return stripped[: limit - 1] + "…"
+
+
 def format_match_message(match: dict) -> str:
     """Align with automation/filters/lib/languagetool-message.jq (reviewdog + TUI)."""
     rule = match.get("rule") or {}
@@ -30,10 +37,14 @@ def format_match_message(match: dict) -> str:
     parts = [f"[languagetool] {rule_id}: {base}"]
     if issue_type:
         parts.append(f"Type: {issue_type}")
-    ctx = match.get("context") or {}
-    ctx_text = str(ctx.get("text") or "")
-    if ctx_text:
-        parts.append(f"In text: «{ctx_text}»")
+    if str(issue_type).lower() == "misspelling":
+        token = matched_text_from_match(match)
+        if token:
+            parts.append(f"Matched: «{token}»")
+    else:
+        ctx_text = str((match.get("context") or {}).get("text") or "")
+        if ctx_text.strip():
+            parts.append(f"In text: «{_context_snippet(ctx_text)}»")
     replacements = match.get("replacements") or []
     if replacements:
         suggestion = str(replacements[0].get("value") or "")

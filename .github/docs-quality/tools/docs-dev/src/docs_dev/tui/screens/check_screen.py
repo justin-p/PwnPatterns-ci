@@ -105,9 +105,6 @@ class CheckScreen(Screen):
             yield Button("Allowlist  [a]", id="allowlist", variant="success")
             yield Button("Recheck file  [c]", id="recheck-file")
             yield Button("Home  [h]", id="home")
-        with Vertical(id="check-progress-panel", classes="-hidden"):
-            yield Static("", id="check-progress-status", classes="muted")
-            yield RichLog(id="check-progress", highlight=True, markup=False)
         with Horizontal(id="results-body", classes="-editor-hidden"):
             with Vertical(id="results-left"):
                 with Vertical(id="files-panel"):
@@ -141,7 +138,14 @@ class CheckScreen(Screen):
                     soft_wrap=True,
                     tab_behavior="indent",
                 )
-        yield Static(id="summary")
+        with Vertical(id="summary-footer"):
+            yield Static(id="summary")
+            yield RichLog(
+                id="check-progress",
+                highlight=True,
+                markup=False,
+                classes="-hidden",
+            )
         yield Footer()
 
     def on_mount(self) -> None:
@@ -402,19 +406,19 @@ class CheckScreen(Screen):
     def action_fix(self) -> None:
         self._confirm_editor_close_if_dirty(lambda: self._start_check(fix=True))
 
-    def _set_progress_panel_visible(self, visible: bool) -> None:
-        panel = self.query_one("#check-progress-panel")
+    def _set_progress_log_visible(self, visible: bool) -> None:
+        log = self.query_one("#check-progress", RichLog)
         if visible:
-            panel.remove_class("-hidden")
+            log.remove_class("-hidden")
         else:
-            panel.add_class("-hidden")
+            log.add_class("-hidden")
 
     def _append_progress(self, message: str) -> None:
         text = sanitize_log_line(message)
         if not text:
             return
-        self.query_one("#check-progress-status", Static).update(text)
         log = self.query_one("#check-progress", RichLog)
+        self._set_progress_log_visible(True)
         for line in text.splitlines():
             stripped = line.strip()
             if stripped:
@@ -429,12 +433,9 @@ class CheckScreen(Screen):
         run_btn.disabled = True
         fix_btn.disabled = True
         self._update_toolbar_buttons()
-        self._set_progress_panel_visible(True)
         progress_log = self.query_one("#check-progress", RichLog)
         progress_log.clear()
-        self.query_one("#check-progress-status", Static).update(
-            f"Starting {verb} on {self._mode_label}…"
-        )
+        self._set_progress_log_visible(True)
         self.query_one("#summary", Static).update(
             f"[yellow]Running {verb} on {self._mode_label}…[/]"
         )
@@ -529,8 +530,8 @@ class CheckScreen(Screen):
             return
 
         self.notify(f"Re-linting {display_path(path, self._ctx.repo_root)}…", timeout=3)
-        self._set_progress_panel_visible(True)
         self.query_one("#check-progress", RichLog).clear()
+        self._set_progress_log_visible(True)
         self._append_progress(f"Re-linting {display_path(path, self._ctx.repo_root)}…")
         self._update_toolbar_buttons()
 
@@ -572,7 +573,7 @@ class CheckScreen(Screen):
                 timeout=6,
             )
             if self._check_worker is None or not self._check_worker.is_running:
-                self._set_progress_panel_visible(False)
+                self._set_progress_log_visible(False)
             return
 
         allow_worker = getattr(self, "_allowlist_worker", None)
@@ -594,6 +595,8 @@ class CheckScreen(Screen):
                     self._apply_file_rescan(file_path, findings)
             else:
                 self.notify(msg, severity="warning", timeout=8)
+            if self._check_worker is None or not self._check_worker.is_running:
+                self._set_progress_log_visible(False)
             return
 
         worker = getattr(self, "_check_worker", None)
@@ -603,7 +606,7 @@ class CheckScreen(Screen):
         fix_btn = self.query_one("#fix", Button)
         run_btn.disabled = False
         fix_btn.disabled = False
-        self._set_progress_panel_visible(False)
+        self._set_progress_log_visible(False)
         try:
             report = event.worker.result
         except Exception as exc:
