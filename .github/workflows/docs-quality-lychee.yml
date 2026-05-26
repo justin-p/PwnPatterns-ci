@@ -74,6 +74,10 @@ jobs:
           key: cache-lychee-v2-${{ github.sha }}
           restore-keys: cache-lychee-v2-
 
+      - name: Install reviewdog
+        if: steps.targets.outputs.skip != 'true'
+        run: bash "${{ github.workspace }}/.github/pwnpatterns-ci/.github/docs-quality/automation/install/reviewdog.sh"
+
       - name: Run lychee
         id: lychee
         if: steps.targets.outputs.skip != 'true'
@@ -81,10 +85,13 @@ jobs:
           REPO_ROOT: ${{ github.workspace }}
           DOCS_QUALITY_DIR: ${{ github.workspace }}/.github/pwnpatterns-ci/.github/docs-quality
           CI_LINT_LOG_DIR: ${{ github.workspace }}/lint-logs
+          DOC_LINT_INSTALL_DIR: /tmp
           DOC_PATHS: ${{ steps.targets.outputs.paths }}
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           grep -vE '^\s*(#|$)' "${DOCS_QUALITY_DIR}/config/manifest.env" >> "${GITHUB_ENV}"
+          export PATH="${DOC_LINT_INSTALL_DIR}:${PATH}"
           mkdir -p lint-logs
           # shellcheck source=/dev/null
           source "${DOCS_QUALITY_DIR}/automation/lib/ci-steps.sh"
