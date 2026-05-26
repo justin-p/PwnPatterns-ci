@@ -19,9 +19,21 @@ From the repository root:
 
 **Web UI:** run `./scripts/docs-dev.sh web`, open http://127.0.0.1:8765/, click the **docs-dev** tile to start the session. Override bind address with `--host` / `--port` or `DOCS_DEV_WEB_HOST` / `DOCS_DEV_WEB_PORT`.
 
-On **Check Changed** / **Check All**, use the **file filter** (or press **/**) for fuzzy search over paths (e.g. `prometheus`, `prom exp`). Select a file, then a finding, and press **Open file [e]** (or the button under the findings list) to open the markdown editor on the right at that line. The editor uses **Bearded Theme Feat-gold-d-raynh** syntax colors (YAML frontmatter, headings, fenced blocks, strings, and inline code) aligned with the VS Code/Cursor Bearded Bear theme. When you close the editor (**Close** / **esc** / **q**), switch files, run a new check, or go Home, you are prompted to **Save**, **Don't save**, or **Cancel**. **Ctrl+S** saves without closing. Findings that can be allowlisted are marked with `★`. Press **Allowlist [a]** to append a term and sync. **Recheck file [c]** re-lints the selected file; **Run check [r]** re-checks all.
+On **Check Changed** / **Check All**, use the **file filter** (or press **/**) for fuzzy search over paths (e.g. `prometheus`, `prom exp`). Select a file, then a finding, and press **Open file [e]** (or the button under the findings list) to open the markdown editor on the right at that line. The editor uses **Bearded Theme Feat-gold-d-raynh** syntax colors (YAML frontmatter, headings, fenced blocks, strings, and inline code) aligned with the VS Code/Cursor Bearded Bear theme. When you close the editor (**Close** / **esc** / **q**), switch files, run a new check, or go Home, you are prompted to **Save**, **Don't save**, or **Cancel**. **Ctrl+S** saves without closing. Findings that can be allowlisted are marked with `★`. Press **Allowlist [a]** to append a term and sync. **Refresh after allowlist** (toolbar checkbox, shared across Check All and Check Changed) re-lints the current file when enabled; when disabled, the allowlisted finding is removed from the list without running linters. **Recheck file [c]** re-lints the selected file; **Run check [r]** re-checks all.
 
 Allowlists, dual-valid casing (e.g. `certipy` vs `Certipy`), and sync behavior are documented in the repository [README.md](../../../../README.md#dual-valid-casing-cli-tools-and-product-names) (Documentation quality section).
+
+## LanguageTool: local vs CI
+
+LanguageTool **in CI** does not scan raw markdown. It strips YAML frontmatter, blanks fenced code blocks, and removes BBCode-style tags used in docs (e.g. `[color=red][b]...[/b][/color]`). Standalone LanguageTool GUI output / `log.txt` is much noisier because it scans the whole file, including metadata.
+
+To reproduce CI-equivalent LanguageTool output locally, run (from a pattern repo after `scripts/ensure-platform.sh`):
+
+```bash
+export LANGUAGETOOL_HOME="$PWD/.local/doc-linters/LanguageTool-6.5"
+python ".github/pwnpatterns-ci/.github/docs-quality/tools/grammar-routing/run_languagetool_local.py" \
+  -l nl "docs/infra/general/Inadequate_Prometheus_Exporter_implementatie/Inadequate_Prometheus_Exporter_implementatie.md"
+```
 
 The shell wrapper accepts commands (`check`, `fix`, `setup`, `web`) and global flags (`--no-ui`, `--format`, `--changed`, `--fix`, `--skip-lychee`, `--skip-actionlint`). **Doctor**, **sync**, **e2e**, and other maintenance commands live in the TUI menu (Setup on the home screen; checksums, doctor, e2e, sync, vale-sync under **Tools**).
 

@@ -8,7 +8,17 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, DataTable, Footer, Header, Input, RichLog, Static, TextArea
+from textual.widgets import (
+    Button,
+    Checkbox,
+    DataTable,
+    Footer,
+    Header,
+    Input,
+    RichLog,
+    Static,
+    TextArea,
+)
 
 from docs_dev.allowlist import (
     add_term,
@@ -20,6 +30,7 @@ from docs_dev.allowlist import (
     sync_allowlists,
     term_allowlist_status,
     terms_case_pair_from_finding,
+    without_allowlisted_term,
 )
 from docs_dev.context import RepoContext
 from docs_dev.log_util import sanitize_log_line
@@ -104,6 +115,10 @@ class CheckScreen(Screen):
             yield Button("Run check  [r]", id="run", variant="primary")
             yield Button("Fix  [f]", id="fix", variant="warning")
             yield Button("Allowlist  [a]", id="allowlist", variant="success")
+            yield Checkbox(
+                "Refresh after allowlist",
+                id="auto-refresh-after-allowlist",
+            )
             yield Button("Recheck file  [c]", id="recheck-file")
             yield Button("Home  [h]", id="home")
         with Horizontal(id="results-body", classes="-editor-hidden"):
@@ -160,6 +175,9 @@ class CheckScreen(Screen):
         register_bearded_editor_theme(editor)
         editor.load_text("")
         self._set_editor_panel_visible(False)
+        self.query_one("#auto-refresh-after-allowlist", Checkbox).value = (
+            self._auto_refresh_after_allowlist()
+        )
         self._refresh_title()
         self._update_toolbar_buttons()
         self.query_one("#summary", Static).update(
@@ -172,6 +190,18 @@ class CheckScreen(Screen):
         self.query_one("#title", Static).update(
             f"[bold]Documentation check[/] — [accent]{mode}[/]"
         )
+
+    def _auto_refresh_after_allowlist(self) -> bool:
+        return bool(getattr(self.app, "auto_refresh_after_allowlist", True))
+
+    def _findings_for_path(self, path: str) -> list[Finding]:
+        if self._current_file is not None and self._current_file.path == path:
+            return list(self._current_file.findings)
+        if self._report is not None:
+            for ff in self._report.files:
+                if ff.path == path:
+                    return list(ff.findings)
+        return []
 
     def _selected_file_path_for_lint(self) -> str | None:
         if self._current_file is not None:
@@ -280,10 +310,16 @@ class CheckScreen(Screen):
         elif event.button.id == "home":
             self.action_back()
 
+    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        if event.checkbox.id != "auto-refresh-after-allowlist":
+            return
+        if hasattr(self.app, "auto_refresh_after_allowlist"):
+            self.app.auto_refresh_after_allowlist = event.value
+
     def action_help(self) -> None:
         self.notify(
             "r Run · / filter · ↑↓ finding · e Open · esc/q close editor · "
-            "h Home · a allowlist",
+            "h Home · a allowlist · toggle refresh after allowlist",
             title="Check screen",
             timeout=8,
         )
@@ -492,15 +528,17 @@ class CheckScreen(Screen):
         file_path = self._current_file.path if self._current_file else None
         self.notify(f"Adding '{term}' to allowlist…", timeout=3)
 
-        def work() -> tuple[bool, str, str | None, list[Finding]]:
+        def work() -> tuple[bool, str, str | None, list[Finding], str | None, bool]:
             added, msg = add_term(self._ctx, term, finding=finding)
             if not added:
-                return False, msg, file_path, []
+                return False, msg, file_path, [], term, False
             rc = sync_allowlists(self._ctx)
             if rc != 0:
-                return False, f"{msg}; sync exited {rc}", file_path, []
+                return False, f"{msg}; sync exited {rc}", file_path, [], term, False
             findings: list[Finding] = []
-            if file_path:
+            refresh = self._auto_refresh_after_allowlist()
+            did_rescan = refresh and file_path is not None
+            if did_rescan:
                 findings = run_prose_lint(
                     self._ctx,
                     [file_path],
@@ -508,7 +546,8 @@ class CheckScreen(Screen):
                         self._append_progress, m
                     ),
                 )
-            return True, f"{msg}. Re-scanned file.", file_path, findings
+            done = f"{msg}. Re-scanned file." if did_rescan else f"{msg}."
+            return True, done, file_path, findings, term, did_rescan
 
         self._allowlist_worker = self.run_worker(
             lambda: work(),
@@ -585,14 +624,23 @@ class CheckScreen(Screen):
             self._allowlist_worker = None
             self._update_toolbar_buttons()
             try:
-                ok, msg, file_path, findings = event.worker.result
+                ok, msg, file_path, findings, term, did_rescan = event.worker.result
             except Exception as exc:
                 self.notify(f"Allowlist failed: {exc}", severity="error", timeout=8)
                 return
             if ok:
                 self.notify(msg, title="Allowlist", timeout=8)
                 if file_path is not None:
-                    self._apply_file_rescan(file_path, findings)
+                    if did_rescan:
+                        self._apply_file_rescan(file_path, findings)
+                    elif term:
+                        casing = allowlist_casing(self._ctx)
+                        remaining = without_allowlisted_term(
+                            self._findings_for_path(file_path),
+                            term,
+                            casing=casing,
+                        )
+                        self._apply_file_rescan(file_path, remaining)
             else:
                 self.notify(msg, severity="warning", timeout=8)
             if self._check_worker is None or not self._check_worker.is_running:
@@ -881,14 +929,11 @@ class CheckScreen(Screen):
 
         if new_ff.count > 0:
             self._populate_files_table(select_path=path)
-            if (
-                self._current_file is not None
-                and self._current_file.path == path
-                and self._current_file.findings
-            ):
-                self._focus_findings_table()
-            else:
-                self._focus_files_table()
+            # Keep UX stable: after a recheck/allowlist rescan, show and focus the
+            # updated findings for the rescanned file.
+            self._selected_file_path = path
+            self._apply_file_findings(new_ff)
+            self._focus_findings_table()
             return
 
         self._populate_files_table()

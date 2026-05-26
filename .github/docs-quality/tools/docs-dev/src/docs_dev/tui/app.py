@@ -18,6 +18,9 @@ class DocsDevApp(App):
 
     COMMAND_PALETTE_DISPLAY = "Ctrl+P"
 
+    #: Re-lint the current file after allowlist + sync (shared by Check All / Changed).
+    auto_refresh_after_allowlist: bool = True
+
     def get_system_commands(self, screen: Screen) -> Iterable[SystemCommand]:
         yield from super().get_system_commands(screen)
         yield from iter_docs_dev_commands(self, screen)

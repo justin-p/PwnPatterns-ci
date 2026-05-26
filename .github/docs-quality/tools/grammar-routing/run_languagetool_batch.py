@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -17,8 +16,7 @@ from allowlist_terms import (
     load_consumer_allowlists,
 )
 
-FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
-FENCE_OPEN_RE = re.compile(r"^(```+|~~~+)")
+from lt_preprocess import prepare_md_for_languagetool
 
 
 def repo_root() -> Path:
@@ -34,40 +32,6 @@ def offset_to_line_column(text: str, offset: int) -> tuple[int, int]:
     last_nl = text.rfind("\n", 0, offset)
     column = offset - last_nl if last_nl >= 0 else offset + 1
     return line, column
-
-
-def prose_body_and_line_offset(text: str) -> tuple[str, int]:
-    """Return markdown body (no YAML frontmatter) and 1-based line offset for diagnostics."""
-    match = FRONTMATTER_RE.match(text)
-    if not match:
-        return text, 0
-    prefix = text[: match.end()]
-    line_offset = prefix.count("\n")
-    return text[match.end() :], line_offset
-
-
-def strip_fenced_code_blocks(text: str) -> str:
-    """Blank fenced code blocks while preserving line count for LanguageTool offsets."""
-    lines = text.splitlines(keepends=True)
-    out: list[str] = []
-    in_fence = False
-    fence_marker = ""
-    for line in lines:
-        body = line.rstrip("\r\n")
-        newline = line[len(body) :]
-        open_match = FENCE_OPEN_RE.match(body) if not in_fence else None
-        if open_match:
-            in_fence = True
-            fence_marker = open_match.group(1)
-            out.append(newline)
-            continue
-        if in_fence:
-            if FENCE_OPEN_RE.match(body):
-                in_fence = False
-            out.append(newline)
-            continue
-        out.append(line)
-    return "".join(out)
 
 
 def extract_json(stdout: str) -> dict | None:
@@ -88,8 +52,7 @@ def run_languagetool(
     repo_root: Path,
 ) -> dict:
     full_text = file_path.read_text(encoding="utf-8")
-    body, line_offset = prose_body_and_line_offset(full_text)
-    body = strip_fenced_code_blocks(body)
+    body, line_offset = prepare_md_for_languagetool(full_text)
     with tempfile.NamedTemporaryFile(
         mode="w",
         suffix=".md",

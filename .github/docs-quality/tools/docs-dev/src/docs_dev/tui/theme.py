@@ -244,6 +244,12 @@ Footer {
     background: $boost;
 }
 
+#toolbar Checkbox {
+    margin: 0 1 0 1;
+    height: auto;
+    content-align: left middle;
+}
+
 /* ── Check screen ─────────────────────────────────────────────── */
 
 #title {

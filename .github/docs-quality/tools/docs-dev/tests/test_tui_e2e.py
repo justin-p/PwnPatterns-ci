@@ -6,7 +6,7 @@ import time
 
 import pytest
 from textual.command import CommandPalette
-from textual.widgets import Button, DataTable, Input, Static, TextArea
+from textual.widgets import Button, Checkbox, DataTable, Input, Static, TextArea
 
 from docs_dev.tui.app import DocsDevApp
 from docs_dev.tui.screens.check_screen import CheckScreen
@@ -322,6 +322,102 @@ async def test_allowlist_rescan_does_not_crash_files_table(monkeypatch) -> None:
         assert check._current_file is not None
         assert check._current_file.path == tiering
         assert files.cursor_row == tiering_index
+
+
+async def test_allowlist_auto_refresh_toggle_skips_rescan(monkeypatch) -> None:
+    """When refresh-after-allowlist is off, prose lint is skipped; finding drops from UI."""
+    from docs_dev.models import (
+        CheckReport,
+        FileFindings,
+        Finding,
+        StepResult,
+        StepStatus,
+    )
+
+    doc = "docs/example.md"
+
+    def mock_check(_ctx, _opts, **_kwargs):
+        return CheckReport(
+            steps=[StepResult("prose lint", StepStatus.FAIL)],
+            files=[
+                FileFindings(
+                    path=doc,
+                    findings=[
+                        Finding(
+                            tool="vale",
+                            path=doc,
+                            line=10,
+                            column=1,
+                            severity="error",
+                            message="Use 'Prometheus' instead of 'prometheus'.",
+                            rule="Vale.Terms",
+                        )
+                    ],
+                )
+            ],
+        )
+
+    prose_calls: list[list[str]] = []
+
+    def mock_prose(_ctx, paths, **_kwargs):
+        prose_calls.append(list(paths))
+        return []
+
+    def mock_add_term(_ctx, term, *, finding=None):
+        return True, f"Added '{term}'"
+
+    def mock_sync(_ctx):
+        return 0
+
+    monkeypatch.setattr(
+        "docs_dev.tui.screens.check_screen.run_check", mock_check
+    )
+    monkeypatch.setattr(
+        "docs_dev.tui.screens.check_screen.run_prose_lint", mock_prose
+    )
+    monkeypatch.setattr(
+        "docs_dev.tui.screens.check_screen.add_term", mock_add_term
+    )
+    monkeypatch.setattr(
+        "docs_dev.tui.screens.check_screen.sync_allowlists", mock_sync
+    )
+
+    app = DocsDevTestApp()
+
+    async with app.run_test(size=(120, 52)) as pilot:
+        await pilot.pause()
+        await _click_home_button(pilot, app, "check")
+
+        check = app.screen
+        assert isinstance(check, CheckScreen)
+        app.auto_refresh_after_allowlist = False
+        check.query_one("#auto-refresh-after-allowlist", Checkbox).value = False
+
+        await _activate_button(pilot, check.query_one("#run", Button))
+        await _wait_check_summary(pilot)
+
+        await _activate_button(pilot, check.query_one("#allowlist", Button))
+
+        deadline = time.monotonic() + 8.0
+        while time.monotonic() < deadline:
+            if not check._worker_busy():
+                break
+            await pilot.pause(0.05)
+
+        assert prose_calls == []
+        assert check._report is not None
+        assert all(ff.path != doc for ff in check._report.files)
+
+        await _activate_button(pilot, check.query_one("#home", Button))
+        await pilot.pause(0.1)
+        await _click_home_button(pilot, app, "changed")
+        check_changed = app.screen
+        assert isinstance(check_changed, CheckScreen)
+        assert check_changed._opts.changed is True
+        assert (
+            check_changed.query_one("#auto-refresh-after-allowlist", Checkbox).value
+            is False
+        )
 
 
 async def test_check_screen_editor_jumps_to_finding_line(

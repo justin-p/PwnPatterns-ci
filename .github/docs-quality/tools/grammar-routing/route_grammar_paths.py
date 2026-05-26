@@ -5,12 +5,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 from typing import Any
 
-FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
+from lt_preprocess import FRONTMATTER_RE
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "default_language": "en",
