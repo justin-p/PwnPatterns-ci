@@ -1,5 +1,4 @@
 {
-  "plugins": {},
   "filters": {
     "allowlist": {
       "allowlistConfigPaths": [
@@ -10,9 +9,7 @@
   "rules": {
     "spelling": {
       "language": "nl",
-      "wordDefinitionRegexp": "/[\\w']+/g",
       "suggestCorrections": true
     }
   }
 }
-
