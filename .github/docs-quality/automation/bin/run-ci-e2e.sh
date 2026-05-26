@@ -75,18 +75,24 @@ declare -A E2E_RESULTS=()
 declare -A E2E_EXPECTED=()
 
 load_expectations() {
-  local exp="${DOCS_QUALITY_DIR}/config/ci-e2e-expectations.env"
-  if [ ! -f "${exp}" ]; then
-    echo "Missing ${exp}" >&2
+  local platform_exp="${DOCS_QUALITY_DIR}/config/ci-e2e-expectations.env"
+  local consumer_exp="${CONSUMER_CONFIG_DIR}/ci-e2e-expectations.env"
+  if [ ! -f "${platform_exp}" ]; then
+    echo "Missing ${platform_exp}" >&2
     exit 1
   fi
   # shellcheck source=/dev/null
-  source "${exp}"
+  source "${platform_exp}"
+  if [ -f "${consumer_exp}" ]; then
+    # shellcheck source=/dev/null
+    source "${consumer_exp}"
+  fi
   E2E_EXPECTED[vale]=${EXPECT_VALE_EXIT:-0}
   E2E_EXPECTED[typos]=${EXPECT_TYPOS_EXIT:-0}
   E2E_EXPECTED[textlint]=${EXPECT_TEXTLINT_EXIT:-0}
   E2E_EXPECTED[rumdl]=${EXPECT_RUMDL_EXIT:-0}
   E2E_EXPECTED[harper]=${EXPECT_HARPER_EXIT:-0}
+  E2E_EXPECTED[languagetool]=${EXPECT_LANGUAGETOOL_EXIT:-0}
   E2E_EXPECTED[metadata]=${EXPECT_METADATA_EXIT:-0}
   E2E_EXPECTED[prek]=${EXPECT_PREK_EXIT:-0}
   E2E_EXPECTED[lychee]=${EXPECT_LYCHEE_FILTER_EXIT:-0}
