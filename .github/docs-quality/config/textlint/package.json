@@ -1,0 +1,12 @@
+{
+  "name": "pwnpatterns-textlint",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Pinned textlint config for Dutch spelling lane",
+  "dependencies": {
+    "textlint": "^14.8.2",
+    "textlint-filter-rule-allowlist": "^4.0.0",
+    "textlint-rule-spelling": "^0.3.0"
+  }
+}
+

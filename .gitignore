@@ -4,3 +4,4 @@ __pycache__/
 .coverage
 *.pyc
 lint-logs/
+.github/docs-quality/config/textlint/node_modules/

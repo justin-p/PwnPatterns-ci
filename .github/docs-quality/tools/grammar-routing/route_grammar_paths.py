@@ -16,6 +16,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "default_language": "en",
     "fallback_tool": "languagetool",
     "grammar_tools": {"en": "harper", "nl": "languagetool"},
+    "spelling_tools": {"en": "typos", "nl": "textlint"},
+    "spelling_fallback_tool": "typos",
     "languagetool_codes": {"nl": "nl", "fr": "fr", "de": "de-DE", "en": "en-US"},
     "languagetool_enabled": True,
     "grammar_from_frontmatter": True,
@@ -41,7 +43,7 @@ def load_language_tools_config(path: Path) -> dict[str, Any]:
             continue
         if line.endswith(":") and not line.startswith(" "):
             key = line[:-1].strip()
-            if key in ("grammar_tools", "languagetool_codes"):
+            if key in ("grammar_tools", "spelling_tools", "languagetool_codes"):
                 section = key
                 cfg.setdefault(key, {})
             elif key == "grammar_smoke_paths":
@@ -61,7 +63,7 @@ def load_language_tools_config(path: Path) -> dict[str, Any]:
             section = None
             if key in ("languagetool_enabled", "grammar_from_frontmatter"):
                 cfg[key] = value.lower() in ("true", "yes", "1")
-            elif key in ("default_language", "fallback_tool"):
+            elif key in ("default_language", "fallback_tool", "spelling_fallback_tool"):
                 cfg[key] = value
             continue
         if section and line.startswith("  ") and ":" in line:
@@ -139,6 +141,16 @@ def grammar_tool_for_language(lang: str | None, cfg: dict[str, Any]) -> str:
     return fallback
 
 
+def spelling_tool_for_language(lang: str | None, cfg: dict[str, Any]) -> str:
+    tools: dict[str, str] = cfg.get("spelling_tools") or {}
+    default_lang = str(cfg.get("default_language") or "en")
+    fallback = str(cfg.get("spelling_fallback_tool") or "typos")
+    code = (lang or default_lang).strip().lower()
+    if code in tools:
+        return str(tools[code])
+    return fallback
+
+
 def languagetool_code(lang: str, cfg: dict[str, Any]) -> str:
     codes: dict[str, str] = cfg.get("languagetool_codes") or {}
     return str(codes.get(lang, lang))
@@ -149,6 +161,8 @@ def route_paths(
     cfg: dict[str, Any],
     repo: Path,
 ) -> dict[str, Any]:
+    typos: list[str] = []
+    textlint: list[str] = []
     harper: list[str] = []
     languagetool: list[dict[str, str]] = []
     none_paths: list[str] = []
@@ -159,6 +173,11 @@ def route_paths(
         if not rel:
             continue
         lang = read_grammar_language(Path(rel), repo, cfg)
+        spelling_tool = spelling_tool_for_language(lang, cfg)
+        if spelling_tool == "textlint":
+            textlint.append(rel)
+        else:
+            typos.append(rel)
         tool = grammar_tool_for_language(lang, cfg)
         if tool == "harper":
             harper.append(rel)
@@ -180,6 +199,8 @@ def route_paths(
             none_paths.append(rel)
 
     return {
+        "typos": typos,
+        "textlint": textlint,
         "harper": harper,
         "languagetool": languagetool,
         "none": none_paths,
@@ -188,6 +209,16 @@ def route_paths(
 
 def write_route_outputs(log_dir: Path, routed: dict[str, Any]) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
+    typos = routed.get("typos") or []
+    textlint = routed.get("textlint") or []
+    (log_dir / "spelling-typos-paths.lst").write_text(
+        "\n".join(typos) + ("\n" if typos else ""),
+        encoding="utf-8",
+    )
+    (log_dir / "spelling-textlint-paths.lst").write_text(
+        "\n".join(textlint) + ("\n" if textlint else ""),
+        encoding="utf-8",
+    )
     harper = routed.get("harper") or []
     lt_rows = routed.get("languagetool") or []
     (log_dir / "grammar-harper-paths.lst").write_text(
@@ -251,6 +282,8 @@ def main() -> int:
 
     print(
         f"grammar route: harper={len(routed['harper'])} "
+        f"spelling_typos={len(routed['typos'])} "
+        f"spelling_textlint={len(routed['textlint'])} "
         f"languagetool={len(routed['languagetool'])} "
         f"none={len(routed['none'])}",
         file=sys.stderr,

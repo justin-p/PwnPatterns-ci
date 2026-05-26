@@ -205,7 +205,7 @@ def _run_prose_tools(
         os.environ["HARPER_IGNORE_RULES"] = ignore
     _progress(
         on_progress,
-        f"Prose lint on {len(paths)} file(s) (vale, typos, rumdl, harper, languagetool)…",
+        f"Prose lint on {len(paths)} file(s) (vale, typos, textlint, rumdl, harper, languagetool)…",
     )
     script = ctx.automation_bin / "run-parallel-prose-lint.sh"
     if on_progress is not None:
@@ -415,14 +415,14 @@ def _run_actionlint(ctx: RepoContext, on_progress: ProgressFn | None = None) -> 
 
 
 def _prose_failed(ctx: RepoContext) -> bool:
-    for tool in ("vale", "typos", "rumdl", "harper", "languagetool"):
+    for tool in ("vale", "typos", "textlint", "rumdl", "harper", "languagetool"):
         exit_file = ctx.lint_log_dir / f"{tool}.exit"
         if exit_file.is_file() and exit_file.read_text(encoding="utf-8").strip() != "0":
             return True
     return False
 
 
-_PROSE_TOOLS = ("vale", "typos", "rumdl", "harper", "languagetool")
+_PROSE_TOOLS = ("vale", "typos", "textlint", "rumdl", "harper", "languagetool")
 
 
 def _stderr_excerpt(ctx: RepoContext, tool: str, *, limit: int = 160) -> str:
@@ -512,21 +512,22 @@ def _findings_for_unreported_tool_failures(
         )
 
     if "lychee" not in tools_with_findings:
-        log = ctx.lint_log_dir / "lychee.log"
-        if log.is_file():
-            tail = log.read_text(encoding="utf-8").strip().splitlines()
-            if tail and "error" in tail[-1].lower():
-                extra.append(
-                    Finding(
-                        tool="lychee",
-                        path=anchor,
-                        line=1,
-                        column=1,
-                        severity="error",
-                        message=tail[-1][:200],
-                        rule="lychee.run",
-                    )
+        filter_exit = ctx.lint_log_dir / "lychee-filter.exit"
+        lychee_exit = ctx.lint_log_dir / "lychee.exit"
+        code: str | None = None
+        if filter_exit.is_file():
+            code = filter_exit.read_text(encoding="utf-8").strip()
+        elif lychee_exit.is_file():
+            code = lychee_exit.read_text(encoding="utf-8").strip()
+        if code not in (None, "", "0"):
+            extra.append(
+                _synthetic_tool_finding(
+                    ctx,
+                    tool="lychee",
+                    path=anchor,
+                    exit_code=code,
                 )
+            )
 
     return extra
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Convert lint-logs/{vale,typos,rumdl,harper,languagetool}.json to reviewdog rdjsonl on stdout.
+# Convert lint-logs/{vale,typos,textlint,rumdl,harper,languagetool}.json to reviewdog rdjsonl on stdout.
 # Resolves Harper basename paths via lint-logs/path-index.json.
 # Usage: prose-to-rdjsonl.sh <tool> [log-dir]
 set -euo pipefail
 
-TOOL="${1:?tool required (vale|typos|rumdl|harper|languagetool)}"
+TOOL="${1:?tool required (vale|typos|textlint|rumdl|harper|languagetool)}"
 LOG_DIR="${2:-lint-logs}"
 
 # shellcheck source=../lib/env.sh
@@ -38,7 +38,7 @@ case "${TOOL}" in
     jq -c -R 'fromjson | select(.type == "typo")' "${INPUT}" | jq -s '.' |
       jq "${JQ_BASE[@]}" -f "${FILTER}"
     ;;
-  vale | rumdl | languagetool)
+  vale | rumdl | languagetool | textlint)
     jq "${JQ_BASE[@]}" -f "${FILTER}" "${INPUT}"
     ;;
   *)

@@ -57,13 +57,14 @@ def replace_block(content: str, begin: str, end: str, lines: list[str]) -> str:
     return content[:start] + "\n" + body + content[stop:]
 
 
-def sync(root: Path) -> tuple[Path, Path, Path]:
+def sync(root: Path) -> tuple[Path, Path, Path, Path, Path, Path, bool, bool]:
     cfg = consumer_config_dir(root)
     terms_path = cfg / "allowlists/terms.txt"
     patterns_path = cfg / "allowlists/patterns.txt"
     accept_path = root / "styles/config/vocabularies/PwnPatterns/accept.txt"
     harper_dict_path = root / ".github/docs-quality/generated/harper-dictionary.txt"
     typos_path = root / "_typos.toml"
+    textlint_allow_path = cfg / "allowlists" / "textlint-allow.yml"
 
     casing_path = cfg / "allowlists" / "canonical-casing.txt"
     casing = read_canonical_casing(casing_path)
@@ -107,6 +108,19 @@ def sync(root: Path) -> tuple[Path, Path, Path]:
         [f'{w} = "{w}"' for w in terms],
     )
     typos_path.write_text(typos, encoding="utf-8")
+    textlint_allow_path.parent.mkdir(parents=True, exist_ok=True)
+    textlint_body = (
+        "\n".join(
+            [f'- "{term}"' for term in terms]
+            + [f'- "{pattern}"' for pattern in patterns]
+        )
+        + "\n"
+    )
+    textlint_allow_path.write_text(textlint_body, encoding="utf-8")
+    platform_textlint_allow = DOCS_QUALITY_DIR / "config" / "allowlists" / "textlint-allow.yml"
+    if textlint_allow_path.resolve() != platform_textlint_allow.resolve():
+        platform_textlint_allow.parent.mkdir(parents=True, exist_ok=True)
+        platform_textlint_allow.write_text(textlint_body, encoding="utf-8")
 
     vale_ini_path = root / ".vale.ini"
     vale_ini = vale_ini_path.read_text(encoding="utf-8")
@@ -135,6 +149,7 @@ def sync(root: Path) -> tuple[Path, Path, Path]:
         accept_path,
         harper_dict_path,
         typos_path,
+        textlint_allow_path,
         terms_path,
         patterns_path,
         terms_changed,
@@ -148,6 +163,7 @@ def main() -> int:
         accept_path,
         harper_dict_path,
         typos_path,
+        textlint_allow_path,
         terms_path,
         patterns_path,
         terms_changed,
@@ -161,6 +177,7 @@ def main() -> int:
     print(f"  {accept_path}")
     print(f"  {harper_dict_path}")
     print(f"  {typos_path}")
+    print(f"  {textlint_allow_path}")
     print(f"  {root / '.vale.ini'} (TokenIgnores)")
     return 0
 

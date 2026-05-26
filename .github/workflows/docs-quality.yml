@@ -56,6 +56,7 @@ jobs:
           echo "HARPER_USER_DICT=${GITHUB_WORKSPACE}/.github/docs-quality/generated/harper-dictionary.txt" >> "${GITHUB_ENV}"
 
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      - uses: oven-sh/setup-bun@4bc9c98a6ad4c6ad8418a3172b6c8a2edba98855 # v2
 
       - name: Documentation targets
         id: targets
@@ -140,7 +141,7 @@ jobs:
         run: |
           set -euo pipefail
           reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}"
-          for tool in vale typos rumdl harper languagetool; do
+          for tool in vale typos textlint rumdl harper languagetool; do
             if [ -s "lint-logs/${tool}.json" ]; then
               uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
                 pwnpatterns-ci ci prose-to-rdjsonl "${tool}" lint-logs \

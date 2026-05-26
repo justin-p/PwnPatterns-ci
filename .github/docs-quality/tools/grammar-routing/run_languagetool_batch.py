@@ -18,6 +18,7 @@ from allowlist_terms import (
 )
 
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
+FENCE_OPEN_RE = re.compile(r"^(```+|~~~+)")
 
 
 def repo_root() -> Path:
@@ -45,6 +46,30 @@ def prose_body_and_line_offset(text: str) -> tuple[str, int]:
     return text[match.end() :], line_offset
 
 
+def strip_fenced_code_blocks(text: str) -> str:
+    """Blank fenced code blocks while preserving line count for LanguageTool offsets."""
+    lines = text.splitlines(keepends=True)
+    out: list[str] = []
+    in_fence = False
+    fence_marker = ""
+    for line in lines:
+        body = line.rstrip("\r\n")
+        newline = line[len(body) :]
+        open_match = FENCE_OPEN_RE.match(body) if not in_fence else None
+        if open_match:
+            in_fence = True
+            fence_marker = open_match.group(1)
+            out.append(newline)
+            continue
+        if in_fence:
+            if FENCE_OPEN_RE.match(body):
+                in_fence = False
+            out.append(newline)
+            continue
+        out.append(line)
+    return "".join(out)
+
+
 def extract_json(stdout: str) -> dict | None:
     for line in reversed(stdout.splitlines()):
         stripped = line.strip()
@@ -64,6 +89,7 @@ def run_languagetool(
 ) -> dict:
     full_text = file_path.read_text(encoding="utf-8")
     body, line_offset = prose_body_and_line_offset(full_text)
+    body = strip_fenced_code_blocks(body)
     with tempfile.NamedTemporaryFile(
         mode="w",
         suffix=".md",

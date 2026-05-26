@@ -119,6 +119,7 @@ class CheckScreen(Screen):
                     yield DataTable(id="files", zebra_stripes=True, cursor_type="row")
                 with Vertical(id="detail-panel"):
                     yield DataTable(id="findings", zebra_stripes=True, cursor_type="row")
+                    yield Static("", id="finding-message", classes="muted")
                     with Horizontal(id="detail-actions"):
                         yield Button(
                             "Open at line  [e]",
@@ -664,11 +665,12 @@ class CheckScreen(Screen):
         if not visible:
             self._current_file = None
             self._selected_file_path = None
-            self.query_one("#findings", DataTable).clear()
-            self._finding_by_row.clear()
-            self._clear_editor()
-            self._update_toolbar_buttons()
-            return
+        self.query_one("#findings", DataTable).clear()
+        self._finding_by_row.clear()
+        self._update_finding_message(None)
+        self._clear_editor()
+        self._update_toolbar_buttons()
+        return
 
         idx = 0
         if select_path is not None:
@@ -731,7 +733,17 @@ class CheckScreen(Screen):
             )
         if ff.findings:
             table.move_cursor(row=0)
+            self._update_finding_message(ff.findings[0])
+        else:
+            self._update_finding_message(None)
         self._update_toolbar_buttons()
+
+    def _update_finding_message(self, finding: Finding | None) -> None:
+        panel = self.query_one("#finding-message", Static)
+        if finding is None:
+            panel.update("")
+            return
+        panel.update(finding.message)
 
     def _clear_editor(self) -> None:
         self._confirm_editor_close_if_dirty(self._reset_editor_ui)
@@ -912,6 +924,7 @@ class CheckScreen(Screen):
                     return
         if event.data_table.id == "findings":
             finding = self._selected_finding()
+            self._update_finding_message(finding)
             if finding is not None:
                 self._sync_editor_to_finding(finding)
             self._update_toolbar_buttons()

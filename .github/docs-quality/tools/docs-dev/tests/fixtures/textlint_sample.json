@@ -1,0 +1,17 @@
+[
+  {
+    "filePath": "docs/nl/sample.md",
+    "messages": [
+      {
+        "ruleId": "spelling",
+        "line": 3,
+        "column": 5,
+        "message": "foutwoord -> fout woord",
+        "fix": {
+          "range": [10, 19],
+          "text": "fout woord"
+        }
+      }
+    ]
+  }
+]

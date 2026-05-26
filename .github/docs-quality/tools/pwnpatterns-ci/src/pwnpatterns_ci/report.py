@@ -46,6 +46,13 @@ def record_lint_exits(log_dir: Path) -> None:
     else:
         _write_exit(log_dir, "typos", 0, "no typos.json")
 
+    textlint_json = log_dir / "textlint.json"
+    if textlint_json.is_file() and textlint_json.stat().st_size:
+        count = int(_jq("[.[]? | .messages[]?] | length", textlint_json).stdout.strip() or "0")
+        _write_exit(log_dir, "textlint", 1 if count else 0, f"{count} message(s) in JSON")
+    else:
+        _write_exit(log_dir, "textlint", 0, "no textlint.json")
+
     rumdl_json = log_dir / "rumdl.json"
     if rumdl_json.is_file() and rumdl_json.stat().st_size:
         count = int(_jq("length", rumdl_json).stdout.strip() or "0")
@@ -93,7 +100,7 @@ def record_lint_exits(log_dir: Path) -> None:
 
 def report_failures(log_dir: Path, max_lines: int = 60) -> int:
     fail = 0
-    for tool in ("vale", "typos", "rumdl", "harper", "languagetool", "metadata"):
+    for tool in ("vale", "typos", "textlint", "rumdl", "harper", "languagetool", "metadata"):
         exit_f = log_dir / f"{tool}.exit"
         if not exit_f.is_file():
             continue

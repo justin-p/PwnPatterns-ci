@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install Vale, typos, rumdl, harper-cli, and LanguageTool with SHA256 verification.
+# Install Vale, typos, rumdl, harper-cli, LanguageTool, and textlint deps.
 set -euo pipefail
 
 # shellcheck source=../lib/env.sh
@@ -71,6 +71,21 @@ EOF
   java -jar "${lt_jar}" --version 2>/dev/null | head -1 || true
 }
 
+install_textlint() {
+  local cfg_dir="${DOCS_QUALITY_DIR}/config/textlint"
+  if [ ! -f "${cfg_dir}/package.json" ]; then
+    return 0
+  fi
+  if ! command -v bun >/dev/null 2>&1; then
+    echo "bun is required to run textlint lanes" >&2
+    return 1
+  fi
+  (
+    cd "${cfg_dir}"
+    bun install --frozen-lockfile
+  )
+}
+
 if [ -x "${install_dir}/vale" ] && [ -x "${install_dir}/typos" ] &&
   [ -x "${install_dir}/rumdl" ] && [ -x "${install_dir}/harper-cli" ]; then
   echo "Doc linters already installed in ${install_dir}"
@@ -79,6 +94,7 @@ if [ -x "${install_dir}/vale" ] && [ -x "${install_dir}/typos" ] &&
   "${install_dir}/rumdl" --version
   "${install_dir}/harper-cli" --version
   install_languagetool || true
+  install_textlint || true
   exit 0
 fi
 
@@ -155,6 +171,7 @@ install_tar_binary harper \
   harper-cli
 
 install_languagetool || true
+install_textlint || true
 
 if [ -n "${GITHUB_PATH:-}" ]; then
   echo "${install_dir}" >>"${GITHUB_PATH}"

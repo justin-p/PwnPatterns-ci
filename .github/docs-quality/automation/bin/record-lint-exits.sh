@@ -4,6 +4,7 @@
 # Policy (matches docs-dev parsers / CI fail policy):
 #   vale     — Severity == error in vale.json (after template-list merge)
 #   typos    — any JSONL record with type == typo
+#   textlint — any message in textlint.json
 #   rumdl    — any issue in rumdl.json (matches rumdl CLI)
 #   harper   — lints with priority >= 127 only
 #   languagetool — any match in languagetool.json
@@ -79,6 +80,23 @@ _record_rumdl() {
   fi
 }
 
+_record_textlint() {
+  local json="${LOG_DIR}/textlint.json"
+  if [ ! -s "${json}" ]; then
+    _write_exit textlint 0 "no textlint.json"
+    return
+  fi
+  local count
+  count="$(
+    jq '[.[]? | .messages[]?] | length' "${json}" 2>/dev/null || echo 0
+  )"
+  if [ "${count}" -gt 0 ]; then
+    _write_exit textlint 1 "${count} message(s) in JSON"
+  else
+    _write_exit textlint 0 "0 messages in JSON"
+  fi
+}
+
 _record_harper() {
   local json="${LOG_DIR}/harper.json"
   if [ ! -s "${json}" ]; then
@@ -136,6 +154,7 @@ _record_metadata() {
 _require_jq
 _record_vale
 _record_typos
+_record_textlint
 _record_rumdl
 _record_harper
 _record_languagetool

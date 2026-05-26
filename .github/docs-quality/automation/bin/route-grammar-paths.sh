@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Split lint targets by frontmatter language and grammar tool (see config/language-tools.yml).
-# Writes grammar-harper-paths.lst, grammar-languagetool.tsv, and grammar-route.json under LOG_DIR.
+# Split lint targets by frontmatter language and tool routing (see config/language-tools.yml).
+# Writes spelling-typos-paths.lst, spelling-textlint-paths.lst,
+# grammar-harper-paths.lst, grammar-languagetool.tsv, and grammar-route.json under LOG_DIR.
 set -euo pipefail
 
 # shellcheck source=../lib/env.sh
@@ -12,9 +13,11 @@ mapfile -t paths < <(bash "${AUTOMATION_DIR}/bin/load-doc-paths.sh")
 mkdir -p "${LOG_DIR}"
 
 if [ "${#paths[@]}" -eq 0 ]; then
+  : >"${LOG_DIR}/spelling-typos-paths.lst"
+  : >"${LOG_DIR}/spelling-textlint-paths.lst"
   : >"${LOG_DIR}/grammar-harper-paths.lst"
   : >"${LOG_DIR}/grammar-languagetool.tsv"
-  echo '{"harper":[],"languagetool":[],"none":[]}' >"${LOG_DIR}/grammar-route.json"
+  echo '{"typos":[],"textlint":[],"harper":[],"languagetool":[],"none":[]}' >"${LOG_DIR}/grammar-route.json"
   exit 0
 fi
 

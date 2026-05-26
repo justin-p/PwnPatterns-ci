@@ -79,6 +79,26 @@ _report_rumdl() {
   fi
 }
 
+_report_textlint() {
+  _section "textlint"
+  _tail_file "textlint.stderr" "${LOG_DIR}/textlint.stderr"
+  if [ -s "${LOG_DIR}/textlint.json" ]; then
+    local count
+    count="$(
+      jq '[.[]? | .messages[]?] | length' "${LOG_DIR}/textlint.json" 2>/dev/null || echo 0
+    )"
+    echo "Textlint findings: ${count}"
+    jq -r '
+      [.[]? | .filePath as $path | .messages[]?
+        | "\($path):\(.line // 1): \(.ruleId // "textlint"): \(.message // "")"]
+      | .[:'"${MAX_LINES}"']
+      | .[]
+    ' "${LOG_DIR}/textlint.json" 2>/dev/null || echo "(could not parse textlint.json)"
+  else
+    echo "(no textlint.json)"
+  fi
+}
+
 _report_harper() {
   _section "harper (blocking priority >= 127)"
   _tail_file "harper.stderr" "${LOG_DIR}/harper.stderr"
@@ -140,6 +160,7 @@ _report_tool() {
     vale) _report_vale ;;
     typos) _report_typos ;;
     rumdl) _report_rumdl ;;
+    textlint) _report_textlint ;;
     harper) _report_harper ;;
     languagetool) _report_languagetool ;;
     metadata) _report_metadata ;;
@@ -149,7 +170,7 @@ _report_tool() {
 
 _require_jq
 
-for tool in vale typos rumdl harper languagetool metadata; do
+for tool in vale typos textlint rumdl harper languagetool metadata; do
   exit_file="${LOG_DIR}/${tool}.exit"
   if [ -f "${exit_file}" ] && [ "$(tr -d '[:space:]' <"${exit_file}")" -ne 0 ]; then
     echo "::error title=${tool}::${tool} reported issues (details below)"

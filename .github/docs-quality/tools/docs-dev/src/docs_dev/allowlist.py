@@ -7,6 +7,7 @@ from pathlib import Path
 
 from docs_dev.context import RepoContext
 from docs_dev.models import Finding
+from docs_dev.parsers.textlint import spelling_word
 from docs_dev.runners import maintenance
 
 _SPELLING_RE = re.compile(
@@ -518,6 +519,11 @@ def extract_allowlist_term(
         if match:
             return _apply_canonical_casing(match.group(1).strip(), rules)
         return None
+    if finding.tool == "textlint":
+        word = spelling_word(finding.message)
+        if word:
+            return _apply_canonical_casing(word, rules)
+        return None
     if finding.tool == "languagetool":
         if not _LT_MISSPELLING.search(finding.message):
             return None
@@ -562,6 +568,13 @@ def allowlist_hint(
             "Vale Terms style rules are not allowlisted here. "
             "Fix the wording in the doc, or add terms in "
             "config/allowlists/terms.txt and sync."
+        )
+    if finding.tool == "textlint":
+        if spelling_word(finding.message):
+            return None
+        return (
+            "Only textlint spelling findings can be allowlisted from the TUI. "
+            "Add terms in config/allowlists/terms.txt and sync."
         )
     if finding.tool == "harper":
         return "Harper findings use harper.ignore-rules, not terms.txt."

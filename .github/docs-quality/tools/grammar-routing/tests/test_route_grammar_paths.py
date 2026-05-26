@@ -10,6 +10,7 @@ from route_grammar_paths import (
     merge_lint_paths,
     read_grammar_language,
     route_paths,
+    spelling_tool_for_language,
     write_route_outputs,
 )
 
@@ -37,6 +38,8 @@ def test_load_default_config(tmp_path: Path) -> None:
     assert cfg["default_language"] == "en"
     assert cfg["grammar_tools"]["en"] == "harper"
     assert cfg["grammar_tools"]["nl"] == "languagetool"
+    assert cfg["spelling_tools"]["en"] == "typos"
+    assert cfg["spelling_tools"]["nl"] == "textlint"
     assert ".github/tests/fixtures/nl-languagetool-smoke.md" in cfg["grammar_smoke_paths"]
 
 
@@ -45,6 +48,13 @@ def test_grammar_tool_for_language() -> None:
     assert grammar_tool_for_language("en", cfg) == "harper"
     assert grammar_tool_for_language("nl", cfg) == "languagetool"
     assert grammar_tool_for_language("fr", cfg) == "languagetool"
+
+
+def test_spelling_tool_for_language() -> None:
+    cfg = load_language_tools_config(Path("/nonexistent"))
+    assert spelling_tool_for_language("en", cfg) == "typos"
+    assert spelling_tool_for_language("nl", cfg) == "textlint"
+    assert spelling_tool_for_language("fr", cfg) == "typos"
 
 
 def test_merge_lint_paths_includes_smoke_fixture(tmp_path: Path) -> None:
@@ -82,6 +92,8 @@ def test_route_paths_by_language(tmp_path: Path) -> None:
     )
     cfg = load_language_tools_config(Path("/nonexistent"))
     routed = route_paths(["docs/en.md", "docs/nl.md"], cfg, repo)
+    assert routed["typos"] == ["docs/en.md"]
+    assert routed["textlint"] == ["docs/nl.md"]
     assert routed["harper"] == ["docs/en.md"]
     assert len(routed["languagetool"]) == 1
     assert routed["languagetool"][0]["path"] == "docs/nl.md"
@@ -101,6 +113,8 @@ def test_grammar_from_frontmatter_false_uses_default(tmp_path: Path) -> None:
     cfg["grammar_from_frontmatter"] = False
     cfg["default_language"] = "en"
     routed = route_paths(["docs/english-with-nl-tag.md"], cfg, repo)
+    assert routed["typos"] == ["docs/english-with-nl-tag.md"]
+    assert routed["textlint"] == []
     assert routed["harper"] == ["docs/english-with-nl-tag.md"]
     assert routed["languagetool"] == []
 
@@ -118,4 +132,6 @@ def test_grammar_language_override_when_frontmatter_disabled(tmp_path: Path) -> 
     cfg["grammar_from_frontmatter"] = False
     assert read_grammar_language(Path("docs/dutch.md"), repo, cfg) == "nl"
     routed = route_paths(["docs/dutch.md"], cfg, repo)
+    assert routed["typos"] == []
+    assert routed["textlint"] == ["docs/dutch.md"]
     assert len(routed["languagetool"]) == 1

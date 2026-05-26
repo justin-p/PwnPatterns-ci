@@ -1,0 +1,22 @@
+# Grammar and spelling tool routing defaults for docs-quality CI and docs-dev.
+default_language: en
+fallback_tool: languagetool
+spelling_fallback_tool: typos
+
+grammar_tools:
+  en: harper
+  nl: languagetool
+
+spelling_tools:
+  en: typos
+  nl: textlint
+
+languagetool_codes:
+  en: en
+  nl: nl
+
+languagetool_enabled: true
+grammar_from_frontmatter: true
+grammar_smoke_paths:
+  - ".github/tests/fixtures/nl-languagetool-smoke.md"
+

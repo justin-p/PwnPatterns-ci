@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from docs_dev.models import Finding
-from docs_dev.parsers import harper, languagetool, lychee, metadata, rumdl, typos, vale
+from docs_dev.parsers import harper, languagetool, lychee, metadata, rumdl, textlint, typos, vale
 
 
 def parse_all_lint_logs(
@@ -17,6 +17,9 @@ def parse_all_lint_logs(
     typos_path = lint_dir / "typos.json"
     if typos_path.is_file():
         findings.extend(typos.parse_file(typos_path))
+    textlint_path = lint_dir / "textlint.json"
+    if textlint_path.is_file():
+        findings.extend(textlint.parse_file(textlint_path))
     rumdl_path = lint_dir / "rumdl.json"
     if rumdl_path.is_file():
         findings.extend(rumdl.parse_file(rumdl_path))
@@ -45,6 +48,7 @@ __all__ = [
     "parse_all_lint_logs",
     "vale",
     "typos",
+    "textlint",
     "rumdl",
     "harper",
     "languagetool",

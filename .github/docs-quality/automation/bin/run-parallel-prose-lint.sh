@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run vale, typos, rumdl, and grammar tools (Harper / LanguageTool) on DOC_PATHS.
+# Run vale, spelling tools (typos / textlint), rumdl, and grammar tools (Harper / LanguageTool) on DOC_PATHS.
 # Grammar routing: config/language-tools.yml + route-grammar-paths.sh
 # Usage: DOC_PATHS=<multiline> HARPER_USER_DICT=... HARPER_IGNORE_RULES=... \
 #   bash run-parallel-prose-lint.sh [lint-logs-dir]
@@ -48,8 +48,18 @@ mapfile -t harper_paths < <(
     cat "${LOG_DIR}/grammar-harper-paths.lst"
   fi
 )
+mapfile -t typos_paths < <(
+  if [ -s "${LOG_DIR}/spelling-typos-paths.lst" ]; then
+    cat "${LOG_DIR}/spelling-typos-paths.lst"
+  fi
+)
+mapfile -t textlint_paths < <(
+  if [ -s "${LOG_DIR}/spelling-textlint-paths.lst" ]; then
+    cat "${LOG_DIR}/spelling-textlint-paths.lst"
+  fi
+)
 
-echo "Linting ${#paths[@]} documentation file(s) (harper: ${#harper_paths[@]}, languagetool: $(grep -c . "${LOG_DIR}/grammar-languagetool.tsv" 2>/dev/null || echo 0))"
+echo "Linting ${#paths[@]} documentation file(s) (typos: ${#typos_paths[@]}, textlint: ${#textlint_paths[@]}, harper: ${#harper_paths[@]}, languagetool: $(grep -c . "${LOG_DIR}/grammar-languagetool.tsv" 2>/dev/null || echo 0))"
 
 export PATH="${DOC_LINT_INSTALL_DIR:-/tmp}:${PATH}"
 
@@ -65,7 +75,37 @@ export PATH="${DOC_LINT_INSTALL_DIR:-/tmp}:${PATH}"
 (
   echo "==> typos"
   set +e
-  typos --format json "${paths[@]}" >"${LOG_DIR}/typos.json" 2>"${LOG_DIR}/typos.stderr"
+  if [ "${#typos_paths[@]}" -gt 0 ]; then
+    typos --format json "${typos_paths[@]}" >"${LOG_DIR}/typos.json" 2>"${LOG_DIR}/typos.stderr"
+  else
+    : >"${LOG_DIR}/typos.json"
+    : >"${LOG_DIR}/typos.stderr"
+  fi
+  set -e
+) &
+(
+  echo "==> textlint"
+  set +e
+  if [ "${#textlint_paths[@]}" -gt 0 ] && command -v bun >/dev/null 2>&1; then
+    textlint_abs=()
+    for _p in "${textlint_paths[@]}"; do
+      if [[ "${_p}" = /* ]]; then
+        textlint_abs+=("${_p}")
+      else
+        textlint_abs+=("${REPO_ROOT}/${_p}")
+      fi
+    done
+    (
+      cd "${DOCS_QUALITY_DIR}/config/textlint"
+      bunx textlint \
+        --config .textlintrc.json \
+        --format json \
+        "${textlint_abs[@]}" >"${LOG_DIR}/textlint.json" 2>"${LOG_DIR}/textlint.stderr" || true
+    )
+  else
+    echo "[]" >"${LOG_DIR}/textlint.json"
+    : >"${LOG_DIR}/textlint.stderr"
+  fi
   set -e
 ) &
 (
@@ -118,6 +158,7 @@ bash "${AUTOMATION_DIR}/bin/record-lint-exits.sh" "${LOG_DIR}"
 
 echo "Vale exit: $(cat "${LOG_DIR}/vale.exit")"
 echo "Typos exit: $(cat "${LOG_DIR}/typos.exit")"
+echo "Textlint exit: $(cat "${LOG_DIR}/textlint.exit")"
 echo "rumdl exit: $(cat "${LOG_DIR}/rumdl.exit")"
 echo "Harper exit: $(cat "${LOG_DIR}/harper.exit")"
 echo "LanguageTool exit: $(cat "${LOG_DIR}/languagetool.exit")"

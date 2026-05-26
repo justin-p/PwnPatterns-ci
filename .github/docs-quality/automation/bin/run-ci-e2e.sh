@@ -84,6 +84,7 @@ load_expectations() {
   source "${exp}"
   E2E_EXPECTED[vale]=${EXPECT_VALE_EXIT:-0}
   E2E_EXPECTED[typos]=${EXPECT_TYPOS_EXIT:-0}
+  E2E_EXPECTED[textlint]=${EXPECT_TEXTLINT_EXIT:-0}
   E2E_EXPECTED[rumdl]=${EXPECT_RUMDL_EXIT:-0}
   E2E_EXPECTED[harper]=${EXPECT_HARPER_EXIT:-0}
   E2E_EXPECTED[metadata]=${EXPECT_METADATA_EXIT:-0}
@@ -120,7 +121,7 @@ print_summary() {
   local fail=0
   echo ""
   echo "==> E2E summary (reviewdog=local)"
-  for name in vale typos rumdl harper languagetool metadata prek lychee shellcheck shfmt actionlint; do
+  for name in vale typos textlint rumdl harper languagetool metadata prek lychee shellcheck shfmt actionlint; do
     check_expectation "${name}" || fail=1
   done
   return "${fail}"
@@ -176,6 +177,7 @@ run_lint_job() {
   ci_parallel_lint "${paths[@]}"
   record_result vale "$(cat "${CI_LINT_LOG_DIR}/vale.exit")"
   record_result typos "$(cat "${CI_LINT_LOG_DIR}/typos.exit")"
+  record_result textlint "$(cat "${CI_LINT_LOG_DIR}/textlint.exit")"
   record_result rumdl "$(cat "${CI_LINT_LOG_DIR}/rumdl.exit")"
   record_result harper "$(cat "${CI_LINT_LOG_DIR}/harper.exit")"
   record_result languagetool "$(cat "${CI_LINT_LOG_DIR}/languagetool.exit")"

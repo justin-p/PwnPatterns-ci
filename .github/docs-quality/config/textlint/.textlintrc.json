@@ -1,0 +1,18 @@
+{
+  "plugins": {},
+  "filters": {
+    "allowlist": {
+      "allowlistConfigPaths": [
+        "../allowlists/textlint-allow.yml"
+      ]
+    }
+  },
+  "rules": {
+    "spelling": {
+      "language": "nl",
+      "wordDefinitionRegexp": "/[\\w']+/g",
+      "suggestCorrections": true
+    }
+  }
+}
+

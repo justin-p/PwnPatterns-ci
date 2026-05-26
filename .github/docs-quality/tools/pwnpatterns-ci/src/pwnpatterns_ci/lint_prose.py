@@ -1,9 +1,10 @@
-"""Parallel prose lint (vale, typos, rumdl, harper, languagetool)."""
+"""Parallel prose lint (vale, typos/textlint, rumdl, harper, languagetool)."""
 
 from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -72,10 +73,18 @@ def route_grammar(layout: Layout, log_dir: Path) -> None:
         )
 
 
-def _run(cmd: list[str], log: Path, stderr: Path, empty_json: str = "[]") -> None:
+def _run(
+    cmd: list[str],
+    log: Path,
+    stderr: Path,
+    *,
+    cwd: Path | str | None = None,
+    empty_json: str = "[]",
+) -> None:
     log.parent.mkdir(parents=True, exist_ok=True)
+    run_cwd = cwd if cwd is not None else os.environ.get("REPO_ROOT", ".")
     with log.open("w", encoding="utf-8") as out, stderr.open("w", encoding="utf-8") as err:
-        r = subprocess.run(cmd, stdout=out, stderr=err, cwd=os.environ.get("REPO_ROOT", "."))
+        r = subprocess.run(cmd, stdout=out, stderr=err, cwd=run_cwd)
     if r.returncode != 0 and not log.stat().st_size:
         log.write_text(empty_json, encoding="utf-8")
 
@@ -100,6 +109,14 @@ def lint_prose(layout: Layout, paths: list[str], log_dir: Path) -> None:
     hp = log_dir / "grammar-harper-paths.lst"
     if hp.is_file():
         harper_paths = [ln.strip() for ln in hp.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    typos_paths: list[str] = []
+    tp = log_dir / "spelling-typos-paths.lst"
+    if tp.is_file():
+        typos_paths = [ln.strip() for ln in tp.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    textlint_paths: list[str] = []
+    tl = log_dir / "spelling-textlint-paths.lst"
+    if tl.is_file():
+        textlint_paths = [ln.strip() for ln in tl.read_text(encoding="utf-8").splitlines() if ln.strip()]
 
     dict_path = os.environ.get("HARPER_USER_DICT", "")
     ignore = os.environ.get("HARPER_IGNORE_RULES", "")
@@ -110,10 +127,55 @@ def lint_prose(layout: Layout, paths: list[str], log_dir: Path) -> None:
         _run(["vale", "--output=JSON", *paths], log_dir / "vale.json", log_dir / "vale.stderr", "{}")
 
     def typos() -> None:
+        if typos_paths:
+            _run(
+                ["typos", "--format", "json", *typos_paths],
+                log_dir / "typos.json",
+                log_dir / "typos.stderr",
+            )
+        else:
+            (log_dir / "typos.json").write_text("", encoding="utf-8")
+            (log_dir / "typos.stderr").write_text("", encoding="utf-8")
+
+    def textlint() -> None:
+        if not textlint_paths:
+            (log_dir / "textlint.json").write_text("[]", encoding="utf-8")
+            (log_dir / "textlint.stderr").write_text("", encoding="utf-8")
+            return
+        textlint_cfg = layout.docs_quality_dir / "config" / "textlint"
+        if not textlint_cfg.is_dir():
+            (log_dir / "textlint.json").write_text("[]", encoding="utf-8")
+            (log_dir / "textlint.stderr").write_text(
+                "textlint config missing; lane skipped\n",
+                encoding="utf-8",
+            )
+            return
+        if not shutil.which("bun"):
+            (log_dir / "textlint.json").write_text("[]", encoding="utf-8")
+            (log_dir / "textlint.stderr").write_text(
+                "bun not found; textlint lane skipped\n",
+                encoding="utf-8",
+            )
+            return
+        repo = Path(os.environ.get("REPO_ROOT", layout.repo_root))
+        abs_paths = [
+            p if Path(p).is_absolute() else str((repo / p).resolve())
+            for p in textlint_paths
+        ]
         _run(
-            ["typos", "--format", "json", *paths],
-            log_dir / "typos.json",
-            log_dir / "typos.stderr",
+            [
+                "bunx",
+                "textlint",
+                "--config",
+                ".textlintrc.json",
+                "--format",
+                "json",
+                *abs_paths,
+            ],
+            log_dir / "textlint.json",
+            log_dir / "textlint.stderr",
+            cwd=textlint_cfg,
+            empty_json="[]",
         )
 
     def rumdl() -> None:
@@ -165,10 +227,17 @@ def lint_prose(layout: Layout, paths: list[str], log_dir: Path) -> None:
             check=False,
         )
 
-    for name, fn in [("vale", vale), ("typos", typos), ("rumdl", rumdl), ("harper", harper), ("languagetool", languagetool)]:
+    for name, fn in [
+        ("vale", vale),
+        ("typos", typos),
+        ("textlint", textlint),
+        ("rumdl", rumdl),
+        ("harper", harper),
+        ("languagetool", languagetool),
+    ]:
         tasks.append((name, fn))
 
-    with ThreadPoolExecutor(max_workers=5) as pool:
+    with ThreadPoolExecutor(max_workers=6) as pool:
         futures = {pool.submit(fn): name for name, fn in tasks}
         for fut in as_completed(futures):
             name = futures[fut]

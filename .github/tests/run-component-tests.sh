@@ -205,6 +205,23 @@ test_harper_jq() {
   rm -rf "${tmp}"
 }
 
+test_textlint_jq() {
+  local out tmp
+  tmp="$(mktemp -d)"
+  cp "${DOCS_DEV_FIXTURES}/textlint_sample.json" "${tmp}/textlint.json"
+  printf '%s\n' "docs/nl/sample.md" >"${tmp}/lint-paths.lst"
+  out="$(mktemp)"
+  bash "${DOCS_QUALITY_DIR}/automation/bin/prose-to-rdjsonl.sh" textlint "${tmp}" >"${out}"
+  assert_jsonl_nonempty "textlint-to-rdjsonl" "${out}"
+  if ! jq -se '.[0].message | contains("[textlint]") and contains("foutwoord")' "${out}" | grep -q true; then
+    fail "textlint-to-rdjsonl: expected enriched spelling message"
+  else
+    pass "textlint-to-rdjsonl contextual message"
+  fi
+  rm -f "${out}"
+  rm -rf "${tmp}"
+}
+
 test_typos_jq() {
   local out tmp
   tmp="$(mktemp -d)"
@@ -456,6 +473,7 @@ test_route_grammar_paths
 test_record_lint_exits
 test_lychee_403_filter
 test_vale_jq
+test_textlint_jq
 test_typos_jq
 test_harper_jq
 test_languagetool_jq
