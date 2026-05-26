@@ -117,13 +117,65 @@ def stream_bash_script(
     return proc.returncode or 0
 
 
+def uv_run_tool_streamed(
+    ctx: RepoContext,
+    project_dir: Path,
+    *args: str,
+    env_extra: dict[str, str] | None = None,
+    on_line: Callable[[str], None] | None = None,
+) -> RunResult:
+    """Run ``uv run`` in *project_dir*, streaming stderr lines as they arrive."""
+    import threading
+
+    env = _plain_output_env(ctx.path_with_tools())
+    clean = {k: v for k, v in env.items() if k != "VIRTUAL_ENV"}
+    if env_extra:
+        clean.update(env_extra)
+    start = time.monotonic()
+    proc = subprocess.Popen(
+        ["uv", "run", "--directory", str(project_dir), *args],
+        cwd=ctx.repo_root,
+        env=clean,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
+    assert proc.stdout is not None
+    assert proc.stderr is not None
+    stderr_chunks: list[str] = []
+
+    def drain_stderr() -> None:
+        for raw in proc.stderr:
+            stderr_chunks.append(raw)
+            chunk = strip_ansi(raw.rstrip("\n"))
+            if chunk and on_line:
+                on_line(chunk)
+
+    stderr_thread = threading.Thread(target=drain_stderr, daemon=True)
+    stderr_thread.start()
+    stdout = proc.stdout.read()
+    proc.wait()
+    stderr_thread.join()
+    elapsed = int((time.monotonic() - start) * 1000)
+    return RunResult(
+        returncode=proc.returncode or 0,
+        stdout=stdout or "",
+        stderr="".join(stderr_chunks),
+        duration_ms=elapsed,
+    )
+
+
 def uv_run_tool(
     ctx: RepoContext,
     project_dir: Path,
     *args: str,
+    env_extra: dict[str, str] | None = None,
 ) -> RunResult:
     env = ctx.path_with_tools()
     clean = {k: v for k, v in env.items() if k != "VIRTUAL_ENV"}
+    if env_extra:
+        clean.update(env_extra)
     start = time.monotonic()
     proc = subprocess.run(
         ["uv", "run", "--directory", str(project_dir), *args],

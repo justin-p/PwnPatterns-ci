@@ -66,6 +66,7 @@ class CheckScreen(Screen):
         skip_lychee: bool = False,
         skip_actionlint: bool = False,
         skip_shell: bool = True,
+        skip_prek: bool = True,
     ) -> None:
         super().__init__()
         self._opts = CheckOptions(
@@ -74,6 +75,7 @@ class CheckScreen(Screen):
             skip_lychee=skip_lychee,
             skip_actionlint=skip_actionlint,
             skip_shell=skip_shell,
+            skip_prek=skip_prek,
         )
         self._ctx = RepoContext.from_env()
         self._report = None
@@ -451,6 +453,7 @@ class CheckScreen(Screen):
             skip_lychee=self._opts.skip_lychee,
             skip_actionlint=self._opts.skip_actionlint,
             skip_shell=self._opts.skip_shell,
+            skip_prek=self._opts.skip_prek,
         )
         def on_progress(message: str) -> None:
             self.app.call_from_thread(self._append_progress, message)

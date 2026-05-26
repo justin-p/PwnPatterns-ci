@@ -234,34 +234,40 @@ def get_all_markdown_files() -> List[str]:
         return []
 
 
+def _progress(message: str) -> None:
+    if os.environ.get("DOCS_DEV_PROGRESS"):
+        print(message, file=sys.stderr, flush=True)
+
+
 def check_duplicate_ids(files: List[str]) -> List[str]:
-    """Check for duplicate IDs across all files."""
-    errors = []
-    id_map = {}
+    """Check for duplicate IDs across all pattern docs (single pass)."""
+    errors: List[str] = []
+    id_map: Dict[str, str] = {}
+    targets = set(files)
+    all_md = get_all_markdown_files()
+    to_scan = sorted(targets | (set(all_md) - targets))
+    total = len(to_scan)
+    if total:
+        _progress(f"Checking duplicate IDs across {total} doc(s)…")
 
-    def check_file(file: str) -> None:
+    for index, file in enumerate(to_scan, start=1):
+        if index == 1 or index % 25 == 0 or index == total:
+            _progress(f"metadata duplicate IDs {index}/{total}")
         try:
-            validator = MetadataValidator(file)
-            metadata = validator.validate()
-            if "id" in metadata:
-                if metadata["id"] in id_map:
-                    errors.append(
-                        f'❌ Duplicate ID found: "{metadata["id"]}" in files:\n'
-                        f'   - {id_map[metadata["id"]]}\n'
-                        f'   - {file}'
-                    )
-                else:
-                    id_map[metadata["id"]] = file
+            metadata = MetadataValidator(file).validate()
         except Exception:
-            pass
-
-    # Check files being committed
-    for file in files:
-        check_file(file)
-
-    # Check against existing files
-    for file in set(get_all_markdown_files()) - set(files):
-        check_file(file)
+            continue
+        doc_id = metadata.get("id")
+        if not doc_id:
+            continue
+        if doc_id in id_map:
+            errors.append(
+                f'❌ Duplicate ID found: "{doc_id}" in files:\n'
+                f"   - {id_map[doc_id]}\n"
+                f"   - {file}"
+            )
+        else:
+            id_map[doc_id] = file
 
     return errors
 
@@ -345,7 +351,10 @@ def main() -> int:
 
     errors = []
 
-    for file in files:
+    total = len(files)
+    for index, file in enumerate(files, start=1):
+        if index == 1 or index % 10 == 0 or index == total:
+            _progress(f"metadata validate {index}/{total}: {file}")
         try:
             MetadataValidator(file).validate()
         except MetadataError as e:

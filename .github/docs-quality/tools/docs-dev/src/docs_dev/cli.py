@@ -98,6 +98,13 @@ def main(
     ] = False,
     skip_lychee: Annotated[bool, typer.Option("--skip-lychee")] = False,
     skip_actionlint: Annotated[bool, typer.Option("--skip-actionlint")] = False,
+    skip_prek: Annotated[
+        bool,
+        typer.Option(
+            "--skip-prek",
+            help="Skip prek (full-repo hooks); default in TUI, use for faster local checks",
+        ),
+    ] = False,
     format: Annotated[
         OutputFormat, typer.Option("--format", help="Output format (non-TUI)")
     ] = OutputFormat.rich,
@@ -115,6 +122,7 @@ def main(
         fix=fix,
         skip_lychee=skip_lychee,
         skip_actionlint=skip_actionlint,
+        skip_prek=skip_prek,
     )
     def on_progress(message: str) -> None:
         console.print(message)

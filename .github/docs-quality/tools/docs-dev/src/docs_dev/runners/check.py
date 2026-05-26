@@ -15,7 +15,14 @@ from docs_dev.models import (
 )
 from docs_dev.parsers import lychee, parse_all_lint_logs
 from docs_dev.parsers.harper import BLOCKING_PRIORITY
-from docs_dev.subprocess_util import run, run_bash_script, uv_run_tool, write_exit_code, write_log
+from docs_dev.subprocess_util import (
+    run,
+    run_bash_script,
+    uv_run_tool,
+    uv_run_tool_streamed,
+    write_exit_code,
+    write_log,
+)
 from docs_dev.template_list_contractions import (
     apply_fixes as apply_template_list_contraction_fixes,
     merge_into_vale_json,
@@ -37,11 +44,17 @@ class CheckOptions:
     skip_lychee: bool = False
     skip_actionlint: bool = False
     skip_shell: bool = False
+    skip_prek: bool = False
     git_base: str = "origin/main"
     git_head: str = "HEAD"
 
 
-def _setup_job(ctx: RepoContext, on_progress: ProgressFn | None = None) -> int:
+def _setup_job(
+    ctx: RepoContext,
+    on_progress: ProgressFn | None = None,
+    *,
+    skip_prek: bool = False,
+) -> int:
     _progress(on_progress, "Preparing Harper config…")
     ctx.prepare_harper_config()
     _progress(on_progress, "Syncing allowlists…")
@@ -54,8 +67,12 @@ def _setup_job(ctx: RepoContext, on_progress: ProgressFn | None = None) -> int:
         return r.returncode
     _progress(on_progress, "Syncing Vale styles…")
     run_bash_script(ctx, ctx.automation_bin / "vale-sync.sh")
-    _progress(on_progress, "Ensuring prek is installed…")
-    run(ctx, ["uv", "tool", "install", "prek"])
+    _progress(on_progress, "Preparing metadata validator…")
+    meta_project = ctx.docs_quality_dir / "tools" / "verify-metadata"
+    run(ctx, ["uv", "sync", "--directory", str(meta_project)], capture=True)
+    if not skip_prek:
+        _progress(on_progress, "Ensuring prek is installed…")
+        run(ctx, ["uv", "tool", "install", "prek"])
     return 0
 
 
@@ -256,14 +273,28 @@ def _run_metadata(
     out = ctx.lint_log_dir / "metadata.rdjsonl"
     err = ctx.lint_log_dir / "metadata.stderr"
     project = ctx.docs_quality_dir / "tools" / "verify-metadata"
-    r = uv_run_tool(
-        ctx,
-        project,
-        "python",
-        "verify_metadata.py",
-        "--rdjsonl",
-        *paths,
-    )
+    env_extra = {"DOCS_DEV_PROGRESS": "1"}
+    if on_progress is not None:
+        r = uv_run_tool_streamed(
+            ctx,
+            project,
+            "python",
+            "verify_metadata.py",
+            "--rdjsonl",
+            *paths,
+            env_extra=env_extra,
+            on_line=lambda line: _progress(on_progress, line),
+        )
+    else:
+        r = uv_run_tool(
+            ctx,
+            project,
+            "python",
+            "verify_metadata.py",
+            "--rdjsonl",
+            *paths,
+            env_extra=env_extra,
+        )
     out.write_text(r.stdout, encoding="utf-8")
     err.write_text(r.stderr, encoding="utf-8")
     write_exit_code(ctx, "metadata", r.returncode)
@@ -382,6 +413,7 @@ def run_check(
             "skip_lychee": opts.skip_lychee,
             "skip_actionlint": opts.skip_actionlint,
             "skip_shell": opts.skip_shell,
+            "skip_prek": opts.skip_prek,
         },
     )
 
@@ -396,7 +428,7 @@ def run_check(
         return report
 
     _progress(on_progress, "Setting up linters…")
-    if _setup_job(ctx, on_progress) != 0:
+    if _setup_job(ctx, on_progress, skip_prek=opts.skip_prek) != 0:
         report.steps.append(StepResult(name="setup", status=StepStatus.FAIL))
         return report
 
@@ -418,12 +450,18 @@ def run_check(
         report.steps.append(
             _parallel_prose_lint(ctx, paths, on_progress=on_progress)
         )
-        report.steps.append(_run_prek(ctx, on_progress))
+        if opts.skip_prek:
+            report.steps.append(StepResult(name="prek", status=StepStatus.SKIP))
+        else:
+            report.steps.append(_run_prek(ctx, on_progress))
     else:
         report.steps.append(
             _parallel_prose_lint(ctx, paths, on_progress=on_progress)
         )
-        report.steps.append(_run_prek(ctx, on_progress))
+        if opts.skip_prek:
+            report.steps.append(StepResult(name="prek", status=StepStatus.SKIP))
+        else:
+            report.steps.append(_run_prek(ctx, on_progress))
 
     report.steps.append(_run_metadata(ctx, paths, on_progress))
 
