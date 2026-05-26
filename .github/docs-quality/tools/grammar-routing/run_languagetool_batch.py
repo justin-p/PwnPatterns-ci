@@ -12,6 +12,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+from allowlist_terms import (
+    filter_languagetool_matches,
+    load_consumer_allowlists,
+)
+
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 
 
@@ -145,6 +150,7 @@ def main() -> int:
         print("run_languagetool_batch: languagetool-commandline.jar not found", file=sys.stderr)
         return 2
 
+    terms, casing = load_consumer_allowlists(root)
     results: list[dict] = []
     for line in tsv.read_text(encoding="utf-8").splitlines():
         line = line.strip()
@@ -157,7 +163,11 @@ def main() -> int:
         if not full.is_file():
             continue
         try:
-            results.append(run_languagetool(jar, full, lt_code, root))
+            entry = run_languagetool(jar, full, lt_code, root)
+            entry["matches"] = filter_languagetool_matches(
+                entry.get("matches") or [], terms, casing
+            )
+            results.append(entry)
         except OSError as exc:
             results.append(
                 {

@@ -57,6 +57,26 @@ def test_extract_typos_term() -> None:
     assert extract_allowlist_term(f) == "Identifing"
 
 
+def test_extract_languagetool_misspelling_term() -> None:
+    f = _finding(
+        "languagetool",
+        "[languagetool] MORFOLOGIK_RULE_NL_NL: Mogelijke spelfout gevonden. "
+        "— Type: misspelling — In text: «fout » — Suggestion: «fouten»",
+        rule="MORFOLOGIK_RULE_NL_NL",
+    )
+    assert extract_allowlist_term(f) == "fout"
+    assert can_allowlist(f)
+
+
+def test_extract_languagetool_grammar_not_allowlisted() -> None:
+    f = _finding(
+        "languagetool",
+        "[languagetool] RULE: Issue — Type: grammar — In text: «zijn»",
+    )
+    assert extract_allowlist_term(f) is None
+    assert not can_allowlist(f)
+
+
 def test_extract_vale_terms_use() -> None:
     f = _finding("vale", "Use 'prometheus' instead of 'Prometheus'.", rule="Vale.Terms")
     assert extract_allowlist_term(f) == "Prometheus"

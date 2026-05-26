@@ -22,6 +22,8 @@ _MICROSOFT_AUTO_RE = re.compile(
     re.IGNORECASE,
 )
 _TYPO_RE = re.compile(r"typo `([^`]+)` →", re.IGNORECASE)
+_LT_CONTEXT_RE = re.compile(r"In text: «([^»]+)»")
+_LT_MISSPELLING = re.compile(r"Type:\s*misspelling\b", re.IGNORECASE)
 _GOOGLE_ORDINAL_RE = re.compile(
     r"Spell out all ordinal numbers \('([^']+)'\)",
     re.IGNORECASE,
@@ -511,11 +513,19 @@ def extract_allowlist_term(
     rules = casing if casing is not None else {}
     if finding.rule in _CONTRACTION_RULES:
         return None
+    if finding.tool == "typos":
+        match = _TYPO_RE.search(finding.message)
+        if match:
+            return _apply_canonical_casing(match.group(1).strip(), rules)
+        return None
+    if finding.tool == "languagetool":
+        if not _LT_MISSPELLING.search(finding.message):
+            return None
+        match = _LT_CONTEXT_RE.search(finding.message)
+        if match:
+            return _apply_canonical_casing(match.group(1).strip(), rules)
+        return None
     if finding.tool != "vale":
-        if finding.tool == "typos":
-            match = _TYPO_RE.search(finding.message)
-            if match:
-                return match.group(1).strip()
         return None
 
     match = _SPELLING_RE.search(finding.message)
@@ -555,6 +565,16 @@ def allowlist_hint(
         )
     if finding.tool == "harper":
         return "Harper findings use harper.ignore-rules, not terms.txt."
+    if finding.tool == "languagetool":
+        if _LT_MISSPELLING.search(finding.message):
+            return (
+                "Could not extract a term from this LanguageTool misspelling. "
+                "Add it manually in config/allowlists/terms.txt and sync."
+            )
+        return (
+            "Only LanguageTool misspellings can be allowlisted from the TUI. "
+            "Grammar and style issues must be fixed in the doc."
+        )
     return (
         "This Vale rule is not allowlisted from the TUI. "
         "Edit terms.txt or harper.ignore-rules manually."
