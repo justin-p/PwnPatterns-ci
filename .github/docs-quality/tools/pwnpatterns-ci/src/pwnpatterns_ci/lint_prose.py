@@ -124,7 +124,12 @@ def lint_prose(layout: Layout, paths: list[str], log_dir: Path) -> None:
     tasks: list[tuple[str, callable]] = []
 
     def vale() -> None:
-        _run(["vale", "--output=JSON", *paths], log_dir / "vale.json", log_dir / "vale.stderr", "{}")
+        _run(
+            ["vale", "--output=JSON", *paths],
+            log_dir / "vale.json",
+            log_dir / "vale.stderr",
+            empty_json="{}",
+        )
 
     def typos() -> None:
         if typos_paths:

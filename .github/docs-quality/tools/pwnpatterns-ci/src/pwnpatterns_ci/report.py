@@ -40,7 +40,16 @@ def record_lint_exits(log_dir: Path) -> None:
 
     typos_json = log_dir / "typos.json"
     if typos_json.is_file() and typos_json.stat().st_size:
-        r = _jq('s [.[] | select(.type == "typo")] | length', typos_json)
+        r = subprocess.run(
+            [
+                "bash",
+                "-c",
+                f"jq -c -R 'fromjson | select(.type == \"typo\")' {typos_json} | jq -s 'length'",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         count = int(r.stdout.strip() or "0")
         _write_exit(log_dir, "typos", 1 if count else 0, f"{count} typo(s) in JSON")
     else:
