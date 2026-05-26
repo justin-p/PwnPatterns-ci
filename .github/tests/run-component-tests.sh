@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fast offline smoke tests for jq filters, sync-allowlists, and reviewdog local reporter.
+# Fast offline smoke tests for jq filters, sync-allowlists, and reviewdog local reporter.  a
 # shellcheck disable=SC2015
 set -euo pipefail
 
