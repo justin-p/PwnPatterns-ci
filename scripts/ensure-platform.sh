@@ -38,13 +38,6 @@ if [ -d "${DEST}/.github/docs-quality/automation" ]; then
   fi
 fi
 
-if [ "${PWNPATTERNS_CI_LOCAL:-}" = "1" ] || [ "${PWNPATTERNS_CI_USE_EXPORT:-}" = "1" ]; then
-  PWNPATTERNS_CI_DEST="${DEST}" \
-    PWNPATTERNS_CI_SOURCE="${PWNPATTERNS_CI_SOURCE:-${PLATFORM_ROOT}}" \
-    bash "${SCRIPT_DIR}/export-pwnpatterns-ci.sh"
-  exit 0
-fi
-
 if ! command -v git >/dev/null 2>&1; then
   echo "ensure-platform: git is required" >&2
   exit 1
@@ -55,7 +48,7 @@ trap 'rm -rf "${TMP}"' EXIT
 
 if ! git clone --depth 1 "https://github.com/${REPO}.git" "${TMP}/repo" 2>/dev/null; then
   echo "ensure-platform: failed to clone https://github.com/${REPO}.git" >&2
-  echo "Set PWNPATTERNS_CI_USE_EXPORT=1 and PWNPATTERNS_CI_SOURCE to a local PwnPatterns-ci checkout." >&2
+  echo "Fix network/auth or update .github/platform.ref." >&2
   exit 1
 fi
 
