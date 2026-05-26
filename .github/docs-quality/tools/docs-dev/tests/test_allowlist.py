@@ -259,6 +259,7 @@ def test_dual_casing_not_needed_for_foreign_substitution(tmp_path: Path) -> None
     ctx = RepoContext(
         repo_root=tmp_path,
         docs_quality_dir=docs_quality,
+        consumer_config_dir=docs_quality / "config",
         automation_dir=docs_quality / "automation",
         automation_bin=docs_quality / "automation" / "bin",
         automation_install=docs_quality / "automation" / "install",
@@ -330,6 +331,7 @@ def test_add_term_appends_and_dedupes(tmp_path: Path) -> None:
     ctx = RepoContext(
         repo_root=repo,
         docs_quality_dir=docs_quality,
+        consumer_config_dir=docs_quality / "config",
         automation_dir=docs_quality / "automation",
         automation_bin=docs_quality / "automation" / "bin",
         automation_install=docs_quality / "automation" / "install",
@@ -367,6 +369,7 @@ def _make_allowlist_ctx(tmp_path: Path, docs_quality: Path) -> RepoContext:
     return RepoContext(
         repo_root=tmp_path,
         docs_quality_dir=docs_quality,
+        consumer_config_dir=docs_quality / "config",
         automation_dir=docs_quality / "automation",
         automation_bin=docs_quality / "automation" / "bin",
         automation_install=docs_quality / "automation" / "install",

@@ -8,11 +8,18 @@ import pytest
 from docs_dev.models import CheckReport, StepResult, StepStatus
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _docs_dev_test_repo_env() -> None:
+    """Pin REPO_ROOT/DOCS_QUALITY_DIR for the whole run (TUI e2e opens CheckScreen without repo_root fixture)."""
+    root = Path(__file__).resolve().parents[5]
+    docs_quality = root / ".github" / "docs-quality"
+    os.environ["REPO_ROOT"] = str(root)
+    os.environ["DOCS_QUALITY_DIR"] = str(docs_quality)
+
+
 @pytest.fixture(scope="session")
 def repo_root() -> Path:
-    root = Path(__file__).resolve().parents[4]
-    os.environ["REPO_ROOT"] = str(root)
-    return root
+    return Path(os.environ["REPO_ROOT"])
 
 
 @pytest.fixture(autouse=True)

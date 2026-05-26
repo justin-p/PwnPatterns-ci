@@ -33,11 +33,11 @@ _VALE_REGEX_MARKERS = ("(?i)", "(?-i)", "\\b", "[", "(")
 
 
 def terms_path(ctx: RepoContext) -> Path:
-    return ctx.docs_quality_dir / "config" / "allowlists" / "terms.txt"
+    return ctx.consumer_config_dir / "allowlists" / "terms.txt"
 
 
-def canonical_casing_path(docs_quality_dir: Path) -> Path:
-    return docs_quality_dir / "config" / "allowlists" / "canonical-casing.txt"
+def canonical_casing_path(config_dir: Path) -> Path:
+    return config_dir / "allowlists" / "canonical-casing.txt"
 
 
 def read_canonical_casing(path: Path) -> dict[str, str]:
@@ -227,7 +227,7 @@ def ensure_canonical_casing_pair(
     ctx: RepoContext, alias: str, preferred: str
 ) -> bool:
     """Add alias→preferred to canonical-casing.txt if missing. Returns True if changed."""
-    path = canonical_casing_path(ctx.docs_quality_dir)
+    path = canonical_casing_path(ctx.consumer_config_dir)
     header: list[str] = []
     pairs: list[tuple[str, str]] = []
     if path.is_file():
@@ -586,7 +586,7 @@ def can_allowlist(finding: Finding, *, casing: dict[str, str] | None = None) -> 
 
 
 def allowlist_casing(ctx: RepoContext) -> dict[str, str]:
-    return read_canonical_casing(canonical_casing_path(ctx.docs_quality_dir))
+    return read_canonical_casing(canonical_casing_path(ctx.consumer_config_dir))
 
 
 def normalized_allowlist_terms(

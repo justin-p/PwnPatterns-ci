@@ -388,6 +388,7 @@ async def test_check_screen_editor_jumps_to_finding_line(
     ctx = RepoContext(
         repo_root=tmp_path,
         docs_quality_dir=docs_quality,
+        consumer_config_dir=docs_quality / "config",
         automation_dir=docs_quality / "automation",
         automation_bin=docs_quality / "automation" / "bin",
         automation_install=docs_quality / "automation" / "install",
@@ -526,6 +527,7 @@ async def test_check_screen_editor_prompts_save_on_file_change(
     ctx = RepoContext(
         repo_root=tmp_path,
         docs_quality_dir=docs_quality,
+        consumer_config_dir=docs_quality / "config",
         automation_dir=docs_quality / "automation",
         automation_bin=docs_quality / "automation" / "bin",
         automation_install=docs_quality / "automation" / "install",
@@ -637,6 +639,7 @@ async def test_check_screen_editor_prompt_discard_on_close(
     ctx = RepoContext(
         repo_root=tmp_path,
         docs_quality_dir=docs_quality,
+        consumer_config_dir=docs_quality / "config",
         automation_dir=docs_quality / "automation",
         automation_bin=docs_quality / "automation" / "bin",
         automation_install=docs_quality / "automation" / "install",

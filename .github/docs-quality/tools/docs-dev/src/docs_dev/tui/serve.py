@@ -23,10 +23,15 @@ def main() -> None:
     doc_lint = os.environ.get(
         "DOC_LINT_INSTALL_DIR", str(repo_root / ".local" / "doc-linters")
     )
+    docs_quality = os.environ.get(
+        "DOCS_QUALITY_DIR",
+        str(repo_root / ".github" / "pwnpatterns-ci" / ".github" / "docs-quality"),
+    )
 
     launch = (
         f"cd {shlex.quote(str(tool_dir))} && "
         f"REPO_ROOT={shlex.quote(str(repo_root))} "
+        f"DOCS_QUALITY_DIR={shlex.quote(docs_quality)} "
         f"DOC_LINT_INSTALL_DIR={shlex.quote(doc_lint)} "
         "uv run python -m docs_dev.tui"
     )
