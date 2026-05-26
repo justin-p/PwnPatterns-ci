@@ -37,6 +37,15 @@ jobs:
 
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
 
+      - name: Prepare consumer layout stubs for component tests
+        run: |
+          set -euo pipefail
+          allow="${REPO_ROOT}/.github/docs-quality/config/allowlists"
+          mkdir -p "${allow}"
+          printf '%s\n' '# terms' 'actionlint' > "${allow}/terms.txt"
+          printf '%s\n' '# patterns' > "${allow}/patterns.txt"
+          printf '%s\n' '# casing' > "${allow}/canonical-casing.txt"
+
       - name: Component tests
         run: bash .github/pwnpatterns-ci/.github/tests/run-component-tests.sh
 

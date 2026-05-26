@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Prepare allowlist stubs for tool tests
+      - name: Prepare consumer layout stubs for tool tests
         run: |
           set -euo pipefail
           allow=".github/docs-quality/config/allowlists"
@@ -41,6 +41,24 @@ jobs:
           printf '%s\n' '# terms' 'actionlint' > "${allow}/terms.txt"
           printf '%s\n' '# patterns' > "${allow}/patterns.txt"
           printf '%s\n' '# casing' > "${allow}/canonical-casing.txt"
+          mkdir -p styles/config/vocabularies/PwnPatterns
+          : > styles/config/vocabularies/PwnPatterns/accept.txt
+          printf '%s\n' \
+            '[default]' \
+            'extend-ignore-re = [' \
+            '# BEGIN GENERATED extend-ignore-re' \
+            '# END GENERATED extend-ignore-re' \
+            ']' \
+            'extend-words = [' \
+            '# BEGIN GENERATED extend-words' \
+            '# END GENERATED extend-words' \
+            ']' \
+            > _typos.toml
+          printf '%s\n' \
+            '[*.md]' \
+            '# BEGIN GENERATED TokenIgnores' \
+            '# END GENERATED TokenIgnores' \
+            > .vale.ini
 
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
 

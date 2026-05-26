@@ -247,6 +247,7 @@ test_verify_metadata_rdjsonl() {
     return 0
   fi
   local doc="${REPO_ROOT}/docs/.ci-e2e-metadata-invalid.md"
+  mkdir -p "$(dirname "${doc}")"
   cp "${FIXTURES}/metadata-invalid.md" "${doc}"
   trap 'rm -f "${doc}"' RETURN
   local out
