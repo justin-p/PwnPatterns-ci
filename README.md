@@ -53,4 +53,6 @@ git remote add justin-p https://github.com/justin-p/PwnPatterns-ci.git
 PERSONAL_REMOTE=justin-p ./scripts/sync-justin-p-mirror.sh
 ```
 
+If `git push` is rejected with **non-fast-forward** (for example after `ocd-nl/main` was rebased), run the same command with `FORCE_PUSH=1` (adds `--force-with-lease`). One-shot align without the script: `git push justin-p origin/main:main --force-with-lease` from a clone where `origin` is `ocd-nl/PwnPatterns-ci`.
+
 The script prints the mirror commit SHA to pin in consumer `.github/platform.ref`. Scheduled sync on the personal repo uses `OCNDNL_PWNPATTERNS_CI_READ_TOKEN` (PAT with `contents:read` on this repo).

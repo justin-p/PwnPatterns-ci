@@ -15,6 +15,8 @@
 #   ORG_SLUG=ocd-nl/PwnPatterns-ci
 #   MIRROR_SLUG=justin-p/PwnPatterns-ci
 #   PUSH=1                     set to 0 for dry-run (no push)
+#   FORCE_PUSH=0               set to 1 for git push --force-with-lease (required when upstream
+#                              main was rebased and mirror main is not a strict ancestor).
 set -euo pipefail
 
 ORG_REMOTE="${ORG_REMOTE:-ocd-nl}"
@@ -23,6 +25,7 @@ SYNC_BRANCH="${SYNC_BRANCH:-main}"
 ORG_SLUG="${ORG_SLUG:-ocd-nl/PwnPatterns-ci}"
 MIRROR_SLUG="${MIRROR_SLUG:-justin-p/PwnPatterns-ci}"
 PUSH="${PUSH:-1}"
+FORCE_PUSH="${FORCE_PUSH:-0}"
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "${REPO_ROOT}"
@@ -78,7 +81,9 @@ git checkout -B "${SYNC_BRANCH}" "${UPSTREAM}/${SYNC_BRANCH}"
 
 apply_mirror_slug
 
-if git diff --quiet; then
+# Only compare mirror-managed paths; unrelated changes (e.g. editing this script) must not
+# trip the slug commit branch or leak into "nothing to commit" failures from set -e.
+if git diff --quiet HEAD -- "${MIRROR_PATHS[@]}"; then
   MIRROR_COMMIT="$(git rev-parse HEAD)"
   echo "Mirror tree matches ${UPSTREAM}/${SYNC_BRANCH} (slug already applied)."
 else
@@ -95,8 +100,16 @@ EOF
 fi
 
 if [ "${PUSH}" = "1" ]; then
-  git push "${PERSONAL_REMOTE}" "HEAD:${SYNC_BRANCH}"
-  echo "Pushed ${MIRROR_COMMIT} to ${PERSONAL_REMOTE}/${SYNC_BRANCH}"
+  push_args=("${PERSONAL_REMOTE}" "HEAD:${SYNC_BRANCH}")
+  if [ "${FORCE_PUSH}" = "1" ]; then
+    push_args+=(--force-with-lease)
+  fi
+  if git push "${push_args[@]}"; then
+    echo "Pushed ${MIRROR_COMMIT} to ${PERSONAL_REMOTE}/${SYNC_BRANCH}"
+  else
+    echo "sync-justin-p-mirror: push failed (mirror may have diverged). Retry with FORCE_PUSH=1." >&2
+    exit 1
+  fi
 else
   echo "Dry-run: not pushing (set PUSH=1 to push)."
 fi
