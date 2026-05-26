@@ -36,7 +36,7 @@ def run_setup(
     lychee_install = (
         "set -euo pipefail; "
         f"source {ctx.automation_dir / 'lib' / 'env.sh'}; "
-        f"source {ctx.repo_root / '.github' / 'lychee' / 'automation' / 'lib' / 'ci-steps-lychee.sh'}; "
+        f"source {ctx.docs_quality_dir.parent / 'lychee' / 'automation' / 'lib' / 'ci-steps-lychee.sh'}; "
         "lychee_install_cli"
     )
     r = run(ctx, ["bash", "-c", lychee_install])
