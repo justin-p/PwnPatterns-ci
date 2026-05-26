@@ -21,9 +21,9 @@ Pattern repos keep only `scripts/ensure-platform.sh` (copy of `consumer-ensure-p
 ## Layout
 
 - `.github/docs-quality/` — automation, tools (`pwnpatterns-ci`, `docs-dev`, …), `manifest.env`, `styles-base/`
-- `.github/actions/checkout-platform/` — composite action: `actions/checkout` of this repo at `platform_ref`
+- `.github/actions/checkout-platform/` — optional legacy composite; reusable workflows inline `actions/checkout` instead (one fewer SHA pin)
 - `.github/tests/` — component tests + fixtures
-- `.github/workflows/` — reusable `workflow_call` entrypoints (use `checkout-platform`, not export)
+- `.github/workflows/` — reusable `workflow_call` entrypoints (clone platform via `actions/checkout` + `platform_ref`, not export)
 - `renovate.json` — tool version bumps + `refresh-checksums`
 
 Consumers pin `@<sha>` in workflow `uses:` lines and `.github/platform.ref`, and keep only `.github/docs-quality/config/`, thin workflows, and content (`docs/`, `styles/`).

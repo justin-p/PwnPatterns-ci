@@ -29,10 +29,12 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Checkout platform
-        uses: ocd-nl/PwnPatterns-ci/.github/actions/checkout-platform@958530184e7b03ce01fd6a5e960ed2139ea7c29f
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          platform_ref: ${{ inputs.platform_ref }}
-          token: ${{ secrets.PWNPATTERNS_CI_CHECKOUT_TOKEN }}
+          repository: ocd-nl/PwnPatterns-ci
+          ref: ${{ inputs.platform_ref }}
+          path: .github/pwnpatterns-ci
+          token: ${{ secrets.PWNPATTERNS_CI_CHECKOUT_TOKEN != '' && secrets.PWNPATTERNS_CI_CHECKOUT_TOKEN || github.token }}
 
       - name: Load docs-quality manifest
         run: |

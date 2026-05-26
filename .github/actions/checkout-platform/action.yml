@@ -1,3 +1,4 @@
+# Legacy composite — prefer inline actions/checkout in workflows (see .github/workflows/*.yml).
 # Check out ocd-nl/PwnPatterns-ci at a pinned SHA into .github/pwnpatterns-ci/
 name: Checkout pwnpatterns-ci platform
 description: Clone the private platform repository at platform_ref into the consumer workspace.
