@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -116,12 +117,6 @@ class CheckScreen(Screen):
                     yield DataTable(id="files", zebra_stripes=True, cursor_type="row")
                 with Vertical(id="detail-panel"):
                     yield DataTable(id="findings", zebra_stripes=True, cursor_type="row")
-                    yield Static(
-                        "",
-                        id="finding-message",
-                        classes="muted",
-                        markup=False,
-                    )
                     with Horizontal(id="detail-actions"):
                         yield Button(
                             "Open at line  [e]",
@@ -159,7 +154,7 @@ class CheckScreen(Screen):
         files.add_column("File", key="file")
         findings = self.query_one("#findings", DataTable)
         findings.add_column("Ln", width=5, key="line")
-        findings.add_column("Tool", width=8, key="tool")
+        findings.add_column("Tool", width=10, key="tool")
         findings.add_column("Message", key="message")
         editor = self.query_one("#file-editor", TextArea)
         register_bearded_editor_theme(editor)
@@ -675,7 +670,6 @@ class CheckScreen(Screen):
             self._selected_file_path = None
         self.query_one("#findings", DataTable).clear()
         self._finding_by_row.clear()
-        self._update_finding_message(None)
         self._clear_editor()
         self._update_toolbar_buttons()
         return
@@ -697,11 +691,6 @@ class CheckScreen(Screen):
                 if ff.path == path:
                     self._show_file_findings(ff)
                     return
-
-    def _truncate(self, text: str, limit: int = 72) -> str:
-        if len(text) <= limit:
-            return text
-        return text[: limit - 1] + "…"
 
     def _show_file_findings(self, ff: FileFindings) -> None:
         prior = self._current_file
@@ -736,22 +725,13 @@ class CheckScreen(Screen):
             table.add_row(
                 str(f.line),
                 f.tool,
-                mark + self._truncate(f.message),
+                Text(mark + f.message),
+                height=None,
                 key=row_key,
             )
         if ff.findings:
             table.move_cursor(row=0)
-            self._update_finding_message(ff.findings[0])
-        else:
-            self._update_finding_message(None)
         self._update_toolbar_buttons()
-
-    def _update_finding_message(self, finding: Finding | None) -> None:
-        panel = self.query_one("#finding-message", Static)
-        if finding is None:
-            panel.update("")
-            return
-        panel.update(finding.message)
 
     def _clear_editor(self) -> None:
         self._confirm_editor_close_if_dirty(self._reset_editor_ui)
@@ -932,7 +912,6 @@ class CheckScreen(Screen):
                     return
         if event.data_table.id == "findings":
             finding = self._selected_finding()
-            self._update_finding_message(finding)
             if finding is not None:
                 self._sync_editor_to_finding(finding)
             self._update_toolbar_buttons()

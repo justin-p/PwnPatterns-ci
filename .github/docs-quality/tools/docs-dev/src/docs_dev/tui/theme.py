@@ -330,8 +330,8 @@ Footer {
 }
 
 #detail-panel {
-    height: 14;
-    min-height: 10;
+    height: 1fr;
+    min-height: 12;
     border: solid $border;
     background: $surface;
     padding: 0 0 1 0;
