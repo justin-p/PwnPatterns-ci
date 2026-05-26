@@ -162,6 +162,11 @@ def lint_prose(layout: Layout, paths: list[str], log_dir: Path) -> None:
                 encoding="utf-8",
             )
             return
+        consumer_allow = layout.consumer_config_dir / "allowlists" / "textlint-allow.yml"
+        platform_allow = layout.config_dir / "allowlists" / "textlint-allow.yml"
+        if consumer_allow.is_file():
+            platform_allow.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(consumer_allow, platform_allow)
         repo = Path(os.environ.get("REPO_ROOT", layout.repo_root))
         abs_paths = [
             p if Path(p).is_absolute() else str((repo / p).resolve())
