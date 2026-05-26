@@ -308,12 +308,31 @@ def _run_metadata(
     )
 
 
+def _lychee_install_bash(ctx: RepoContext) -> str:
+    lychee_lib = ctx.docs_quality_dir.parent / "lychee" / "automation" / "lib" / "ci-steps-lychee.sh"
+    return (
+        "set -euo pipefail; "
+        f"source {ctx.automation_dir / 'lib' / 'env.sh'}; "
+        f"source {lychee_lib}; "
+        "lychee_install_cli"
+    )
+
+
 def _run_lychee_offline(
     ctx: RepoContext,
     paths: list[str],
     on_progress: ProgressFn | None = None,
 ) -> StepResult:
     _progress(on_progress, f"Checking cached links (offline) on {len(paths)} file(s)…")
+    install = run(ctx, ["bash", "-c", _lychee_install_bash(ctx)])
+    if install.returncode != 0:
+        detail = (install.stderr or install.stdout or "").strip().splitlines()
+        hint = detail[-1] if detail else "lychee install failed"
+        return StepResult(
+            name="lychee (offline)",
+            status=StepStatus.FAIL,
+            detail=hint[:200],
+        )
     report = ctx.repo_root / "lychee" / "report-offline.json"
     report.parent.mkdir(parents=True, exist_ok=True)
     log = ctx.lint_log_dir / "lychee-offline.log"
@@ -334,10 +353,12 @@ def _run_lychee_offline(
     )
     log.write_text((r.stdout or "") + (r.stderr or ""), encoding="utf-8")
     if not report.is_file():
+        tail = (r.stderr or r.stdout or "").strip().splitlines()
+        hint = tail[-1][:160] if tail else "no report produced"
         return StepResult(
             name="lychee (offline)",
             status=StepStatus.FAIL,
-            detail="no report produced",
+            detail=hint,
         )
     data = json.loads(report.read_text(encoding="utf-8"))
     errors = int(data.get("errors") or 0)

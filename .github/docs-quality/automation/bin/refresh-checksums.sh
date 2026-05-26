@@ -80,7 +80,7 @@ set_var REVIEWDOG_LINUX_AMD64_SHA256 "${reviewdog_sha}"
 echo "REVIEWDOG ${reviewdog_version} -> ${reviewdog_sha}"
 
 lychee_version="$(get_var LYCHEE_VERSION)"
-lychee_asset="lychee-x86_64-unknown-linux-gnu.tar.gz"
+lychee_asset="${LYCHEE_LINUX_AMD64_ASSET:-lychee-x86_64-unknown-linux-musl.tar.gz}"
 lychee_sha="$(fetch_sha256 "https://github.com/lycheeverse/lychee/releases/download/lychee-v${lychee_version}/${lychee_asset}")"
 set_var LYCHEE_LINUX_AMD64_SHA256 "${lychee_sha}"
 echo "LYCHEE ${lychee_version} -> ${lychee_sha}"

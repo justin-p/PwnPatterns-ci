@@ -103,7 +103,7 @@ def refresh_checksums(layout: Layout) -> None:
         ("SHELLCHECK", "shellcheck-v{v}.linux.x86_64.tar.xz"),
         ("SHFMT", "shfmt_v{v}_linux_amd64"),
         ("REVIEWDOG", "reviewdog_{v}_Linux_x86_64.tar.gz"),
-        ("LYCHEE", "lychee-x86_64-unknown-linux-gnu.tar.gz"),
+        ("LYCHEE", "lychee-x86_64-unknown-linux-musl.tar.gz"),
         ("ACTIONLINT", "actionlint_{v}_linux_amd64.tar.gz"),
     ):
         v = _get_var(lines, f"{tool}_VERSION")

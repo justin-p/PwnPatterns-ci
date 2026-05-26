@@ -41,7 +41,7 @@ lychee_install_cli() {
   fi
   : "${LYCHEE_VERSION:?LYCHEE_VERSION is required}"
   : "${LYCHEE_LINUX_AMD64_SHA256:?LYCHEE_LINUX_AMD64_SHA256 is required}"
-  local asset="lychee-x86_64-unknown-linux-gnu.tar.gz"
+  local asset="${LYCHEE_LINUX_AMD64_ASSET:-lychee-x86_64-unknown-linux-musl.tar.gz}"
   local url="https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}/${asset}"
   local tmp archive
   tmp="$(mktemp -d)"
@@ -107,6 +107,31 @@ ci_lychee_report_reviewdog() {
     reviewdog -f=rdjsonl -name=lychee \
       -reporter="${reporter}" -fail-level="${fail_level}" -filter-mode="${filter_mode}" ||
     true
+}
+
+ci_lychee_offline() {
+  local -a paths=("$@")
+  local report="${LYCHEE_OFFLINE_REPORT:-lychee/report-offline.json}"
+
+  if [ "${#paths[@]}" -eq 0 ]; then
+    echo "lychee offline: no paths" >&2
+    return 0
+  fi
+
+  lychee_install_cli
+  mkdir -p "$(dirname "${report}")"
+  set +e
+  lychee --config .lychee.toml --offline --no-progress --format json \
+    --output "${report}" "${paths[@]}"
+  local lychee_exit=$?
+  set -e
+  echo "${lychee_exit}" >"${CI_LINT_LOG_DIR:-lint-logs}/lychee.exit" 2>/dev/null || true
+
+  if [ ! -f "${report}" ]; then
+    echo "lychee offline: no report at ${report} (exit ${lychee_exit})" >&2
+    return 1
+  fi
+  return "${lychee_exit}"
 }
 
 ci_lychee_pr() {
