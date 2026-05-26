@@ -56,7 +56,7 @@ jobs:
           echo "HARPER_USER_DICT=${GITHUB_WORKSPACE}/.github/docs-quality/generated/harper-dictionary.txt" >> "${GITHUB_ENV}"
 
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
-      - uses: oven-sh/setup-bun@4bc9c98a6ad4c6ad8418a3172b6c8a2edba98855 # v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
       - name: Documentation targets
         id: targets
