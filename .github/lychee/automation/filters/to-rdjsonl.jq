@@ -2,11 +2,17 @@
 # Pinned for lychee v0.24.x (error_map keys are file paths; values are link result arrays).
 include "lychee-message";
 
-def link_start($body):
-  {
-    line: ($body.span.line // 1),
-    column: ($body.span.column // 1)
-  };
+def link_range($body):
+  ($body.span.line // 1) as $line
+  | ($body.span.column // 1) as $col
+  | (($body.url // $body.uri // "") | length) as $len
+  | {
+      start: {line: $line, column: $col},
+      end: {
+        line: $line,
+        column: ($col + (if $len > 0 then $len else 1 end))
+      }
+    };
 
 def link_diag($path; $body):
   {
@@ -15,7 +21,7 @@ def link_diag($path; $body):
     message: lychee_rdjsonl_message($body),
     location: {
       path: $path,
-      range: {start: link_start($body)}
+      range: link_range($body)
     }
   };
 
