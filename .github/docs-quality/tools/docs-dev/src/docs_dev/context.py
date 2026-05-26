@@ -36,6 +36,24 @@ def resolve_consumer_config_dir(repo_root: Path, docs_quality: Path) -> Path:
     return docs_quality / "config"
 
 
+def resolve_lychee_filter_jq(repo_root: Path, docs_quality: Path) -> Path:
+    for candidate in (
+        repo_root
+        / ".github"
+        / "pwnpatterns-ci"
+        / ".github"
+        / "lychee"
+        / "automation"
+        / "filters"
+        / "to-rdjsonl.jq",
+        repo_root / ".github" / "lychee" / "automation" / "filters" / "to-rdjsonl.jq",
+        docs_quality.parent / "lychee" / "automation" / "filters" / "to-rdjsonl.jq",
+    ):
+        if candidate.is_file():
+            return candidate
+    return repo_root / ".github" / "lychee" / "automation" / "filters" / "to-rdjsonl.jq"
+
+
 @dataclass
 class RepoContext:
     repo_root: Path
@@ -77,12 +95,7 @@ class RepoContext:
             manifest=manifest,
             doc_lint_install_dir=install,
             lint_log_dir=repo_root / "lint-logs",
-            lychee_filter_jq=repo_root
-            / ".github"
-            / "lychee"
-            / "automation"
-            / "filters"
-            / "to-rdjsonl.jq",
+            lychee_filter_jq=resolve_lychee_filter_jq(repo_root, docs_quality),
         )
 
     def path_with_tools(self) -> dict[str, str]:

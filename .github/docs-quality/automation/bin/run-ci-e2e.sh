@@ -127,7 +127,21 @@ print_summary() {
 }
 
 run_component_tests() {
-  bash "${REPO_ROOT}/.github/tests/run-component-tests.sh"
+  local script=""
+  for candidate in \
+    "${REPO_ROOT}/.github/pwnpatterns-ci/.github/tests/run-component-tests.sh" \
+    "${REPO_ROOT}/.github/tests/run-component-tests.sh" \
+    "${DOCS_QUALITY_DIR}/../tests/run-component-tests.sh"; do
+    if [ -f "${candidate}" ]; then
+      script="${candidate}"
+      break
+    fi
+  done
+  if [ -z "${script}" ]; then
+    echo "run-ci-e2e: missing run-component-tests.sh (run scripts/ensure-platform.sh)" >&2
+    exit 1
+  fi
+  bash "${script}"
 }
 
 run_lint_job() {

@@ -12,7 +12,9 @@ export LYCHEE_ENV_LOADED=1
 
 AUTOMATION_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LYCHEE_DIR="$(cd "${AUTOMATION_DIR}/.." && pwd)"
-REPO_ROOT="$(cd "${LYCHEE_DIR}/../.." && pwd)"
+if [ -z "${REPO_ROOT:-}" ]; then
+  REPO_ROOT="$(cd "${LYCHEE_DIR}/../.." && pwd)"
+fi
 
 export AUTOMATION_DIR LYCHEE_DIR REPO_ROOT
 export LYCHEE_CI_403_HOSTS="${LYCHEE_DIR}/config/ci-403-hosts.txt"

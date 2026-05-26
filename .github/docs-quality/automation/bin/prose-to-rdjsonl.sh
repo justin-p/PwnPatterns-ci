@@ -25,7 +25,7 @@ if [ ! -f "${FILTER}" ]; then
   exit 1
 fi
 
-bash "${AUTOMATION}/bin/build-path-index.sh" "${LOG_DIR}"
+bash "${AUTOMATION_DIR}/bin/build-path-index.sh" "${LOG_DIR}"
 PATH_INDEX="$(cat "${IDX}")"
 
 JQ_BASE=(-r -L "${LIB}" --argjson path_index "${PATH_INDEX}")

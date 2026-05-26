@@ -12,12 +12,28 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/env.sh"
 
 _DQ_AUTOMATION_DIR="${AUTOMATION_DIR}"
 _DQ_DOCS_QUALITY_DIR="${DOCS_QUALITY_DIR}"
-LYCHEE_CI_LIB="$(cd "${REPO_ROOT}/.github/lychee/automation/lib" && pwd)/ci-steps-lychee.sh"
+_DQ_REPO_ROOT="${REPO_ROOT}"
+_LYCHEE_LIB=""
+for _lychee_candidate in \
+  "${REPO_ROOT}/.github/pwnpatterns-ci/.github/lychee/automation/lib" \
+  "${REPO_ROOT}/.github/lychee/automation/lib" \
+  "${DOCS_QUALITY_DIR}/../lychee/automation/lib"; do
+  if [ -f "${_lychee_candidate}/ci-steps-lychee.sh" ]; then
+    _LYCHEE_LIB="$(cd "${_lychee_candidate}" && pwd)"
+    break
+  fi
+done
+if [ -z "${_LYCHEE_LIB}" ]; then
+  echo "ci-steps: missing lychee automation lib (platform checkout required)" >&2
+  exit 1
+fi
+LYCHEE_CI_LIB="${_LYCHEE_LIB}/ci-steps-lychee.sh"
 # shellcheck source=/dev/null
 source "${LYCHEE_CI_LIB}"
 export AUTOMATION_DIR="${_DQ_AUTOMATION_DIR}"
 export DOCS_QUALITY_DIR="${_DQ_DOCS_QUALITY_DIR}"
-unset _DQ_AUTOMATION_DIR _DQ_DOCS_QUALITY_DIR
+export REPO_ROOT="${_DQ_REPO_ROOT}"
+unset _DQ_AUTOMATION_DIR _DQ_DOCS_QUALITY_DIR _DQ_REPO_ROOT
 
 CI_LINT_LOG_DIR="${CI_LINT_LOG_DIR:-lint-logs}"
 CI_DOC_SKIP="${CI_DOC_SKIP:-false}"
@@ -29,15 +45,15 @@ ci_load_manifest() {
     {
       grep -vE '^\s*(#|$)' "${MANIFEST}"
       echo "HARPER_IGNORE_RULES<<EOF"
-      grep -vE '^\s*(#|$)' "${DOCS_QUALITY_DIR}/config/harper.ignore-rules" | paste -sd, -
+      grep -vE '^\s*(#|$)' "${CONSUMER_CONFIG_DIR}/harper.ignore-rules" | paste -sd, -
       echo "EOF"
       echo "HARPER_USER_DICT=${HARPER_USER_DICT}"
     } >>"${GITHUB_ENV}"
   fi
   export HARPER_USER_DICT
-  if [ -f "${DOCS_QUALITY_DIR}/config/harper.ignore-rules" ]; then
+  if [ -f "${CONSUMER_CONFIG_DIR}/harper.ignore-rules" ]; then
     HARPER_IGNORE_RULES="$(
-      grep -vE '^\s*(#|$)' "${DOCS_QUALITY_DIR}/config/harper.ignore-rules" | paste -sd, -
+      grep -vE '^\s*(#|$)' "${CONSUMER_CONFIG_DIR}/harper.ignore-rules" | paste -sd, -
     )"
     export HARPER_IGNORE_RULES
   fi

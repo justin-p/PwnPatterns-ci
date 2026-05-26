@@ -4,16 +4,23 @@
 set -euo pipefail
 
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if git rev-parse --show-toplevel >/dev/null 2>&1; then
-  REPO_ROOT="$(git rev-parse --show-toplevel)"
-else
-  REPO_ROOT="$(cd "${TESTS_DIR}/../.." && pwd)"
+if [ -z "${REPO_ROOT:-}" ]; then
+  if git rev-parse --show-toplevel >/dev/null 2>&1; then
+    REPO_ROOT="$(git rev-parse --show-toplevel)"
+  else
+    REPO_ROOT="$(cd "${TESTS_DIR}/../.." && pwd)"
+  fi
 fi
+export REPO_ROOT
 FIXTURES="${TESTS_DIR}/fixtures"
 cd "${REPO_ROOT}"
 
 # shellcheck source=../docs-quality/automation/lib/env.sh
-if [ -f "${REPO_ROOT}/.github/docs-quality/automation/lib/env.sh" ]; then
+if [ -f "${REPO_ROOT}/.github/pwnpatterns-ci/.github/docs-quality/automation/lib/env.sh" ]; then
+  export DOCS_QUALITY_DIR="$(cd "${REPO_ROOT}/.github/pwnpatterns-ci/.github/docs-quality" && pwd)"
+  # shellcheck source=/dev/null
+  source "${DOCS_QUALITY_DIR}/automation/lib/env.sh"
+elif [ -f "${REPO_ROOT}/.github/docs-quality/automation/lib/env.sh" ]; then
   # shellcheck source=/dev/null
   source "${REPO_ROOT}/.github/docs-quality/automation/lib/env.sh"
 elif [ -f "${TESTS_DIR}/../docs-quality/automation/lib/env.sh" ]; then
@@ -28,6 +35,32 @@ fi
 
 DOCS_DEV_FIXTURES="${DOCS_QUALITY_DIR}/tools/docs-dev/tests/fixtures"
 FILTERS_LIB="${DOCS_QUALITY_DIR}/automation/filters/lib"
+
+_resolve_lychee_automation() {
+  for d in \
+    "${REPO_ROOT}/.github/pwnpatterns-ci/.github/lychee/automation" \
+    "${REPO_ROOT}/.github/lychee/automation" \
+    "${DOCS_QUALITY_DIR}/../lychee/automation"; do
+    if [ -d "${d}/filters" ]; then
+      cd "${d}" && pwd
+      return 0
+    fi
+  done
+  echo "run-component-tests: lychee automation dir missing (ensure-platform)" >&2
+  return 1
+}
+
+_resolve_lychee_config() {
+  if [ -d "${REPO_ROOT}/.github/lychee/config" ]; then
+    echo "${REPO_ROOT}/.github/lychee/config"
+    return 0
+  fi
+  echo "run-component-tests: ${REPO_ROOT}/.github/lychee/config missing" >&2
+  return 1
+}
+
+LYCHEE_AUTOMATION="$(_resolve_lychee_automation)"
+LYCHEE_CONFIG="$(_resolve_lychee_config)"
 
 failures=0
 pass() { echo "PASS: $*"; }
@@ -79,9 +112,9 @@ assert_jsonl_nonempty() {
 
 test_lychee_403_filter() {
   local hosts_json tmp
-  hosts_json="$(grep -vE '^\s*(#|$)' .github/lychee/config/ci-403-hosts.txt | jq -Rsc 'split("\n") | map(select(length > 0))')"
+  hosts_json="$(grep -vE '^\s*(#|$)' "${LYCHEE_CONFIG}/ci-403-hosts.txt" | jq -Rsc 'split("\n") | map(select(length > 0))')"
   tmp="$(mktemp)"
-  jq -f .github/lychee/automation/filters/filter-datacenter-403.jq \
+  jq -f "${LYCHEE_AUTOMATION}/filters/filter-datacenter-403.jq" \
     --slurpfile hosts <(echo "${hosts_json}") \
     "${FIXTURES}/lychee/report-with-403.json" >"${tmp}"
   local errors suppressed
@@ -92,7 +125,7 @@ test_lychee_403_filter() {
   else
     fail "lychee 403 filter (errors=${errors}, suppressed=${suppressed})"
   fi
-  jq -r -L "${FILTERS_LIB}" -f .github/lychee/automation/filters/to-rdjsonl.jq "${tmp}" >"${tmp}.rdjsonl"
+  jq -r -L "${FILTERS_LIB}" -f "${LYCHEE_AUTOMATION}/filters/to-rdjsonl.jq" "${tmp}" >"${tmp}.rdjsonl"
   assert_jsonl_nonempty "lychee to-rdjsonl" "${tmp}.rdjsonl"
   if ! jq -se '.[0].message | contains("[lychee]") and contains("Broken link")' "${tmp}.rdjsonl" |
     grep -q true; then
@@ -353,13 +386,13 @@ test_load_doc_paths() {
 
 test_dashboard_body_jq() {
   local hosts_json tmp body
-  hosts_json="$(grep -vE '^\s*(#|$)' .github/lychee/config/ci-403-hosts.txt | jq -Rsc 'split("\n") | map(select(length > 0))')"
+  hosts_json="$(grep -vE '^\s*(#|$)' "${LYCHEE_CONFIG}/ci-403-hosts.txt" | jq -Rsc 'split("\n") | map(select(length > 0))')"
   tmp="$(mktemp)"
-  jq -f .github/lychee/automation/filters/filter-datacenter-403.jq \
+  jq -f "${LYCHEE_AUTOMATION}/filters/filter-datacenter-403.jq" \
     --slurpfile hosts <(echo "${hosts_json}") \
     "${FIXTURES}/lychee/report-with-403.json" >"${tmp}"
   body="$(mktemp)"
-  jq -r -f .github/lychee/automation/filters/dashboard-issue-body.jq \
+  jq -r -f "${LYCHEE_AUTOMATION}/filters/dashboard-issue-body.jq" \
     --arg repo "ocd-nl/PwnPatterns" \
     --arg ref main \
     --arg rerun "https://github.com/ocd-nl/PwnPatterns/actions" \
