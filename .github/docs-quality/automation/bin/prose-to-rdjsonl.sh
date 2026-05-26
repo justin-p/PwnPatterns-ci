@@ -7,9 +7,10 @@ set -euo pipefail
 TOOL="${1:?tool required (vale|typos|rumdl|harper|languagetool)}"
 LOG_DIR="${2:-lint-logs}"
 
-REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)}"
-AUTOMATION="${REPO_ROOT}/.github/docs-quality/automation"
-FILTERS="${AUTOMATION}/filters"
+# shellcheck source=../lib/env.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/env.sh"
+
+FILTERS="${AUTOMATION_DIR}/filters"
 LIB="${FILTERS}/lib"
 INPUT="${LOG_DIR}/${TOOL}.json"
 IDX="${LOG_DIR}/path-index.json"

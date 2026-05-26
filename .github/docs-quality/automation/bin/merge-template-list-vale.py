@@ -18,7 +18,13 @@ def main() -> int:
     if not paths:
         return 0
 
-    sys.path.insert(0, str(repo_root / ".github/docs-quality/tools/docs-dev/src"))
+    docs_quality = Path(
+        os.environ.get(
+            "DOCS_QUALITY_DIR",
+            repo_root / ".github/pwnpatterns-ci/.github/docs-quality",
+        )
+    ).resolve()
+    sys.path.insert(0, str(docs_quality / "tools/docs-dev/src"))
     from docs_dev.template_list_contractions import merge_into_vale_json
 
     vale_json = lint_dir / "vale.json"

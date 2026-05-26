@@ -5,9 +5,10 @@
 #   bash run-parallel-prose-lint.sh [lint-logs-dir]
 set -euo pipefail
 
-REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)}"
+# shellcheck source=../lib/env.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/env.sh"
+
 LOG_DIR="${1:-lint-logs}"
-AUTOMATION_DIR="${REPO_ROOT}/.github/docs-quality/automation"
 
 mapfile -t paths < <(bash "${AUTOMATION_DIR}/bin/load-doc-paths.sh")
 
@@ -81,8 +82,6 @@ export PATH="${DOC_LINT_INSTALL_DIR:-/tmp}:${PATH}"
   echo "==> languagetool"
   set +e
   if [ -s "${LOG_DIR}/grammar-languagetool.tsv" ] && command -v java >/dev/null 2>&1; then
-    # shellcheck source=../lib/env.sh
-    source "${AUTOMATION_DIR}/lib/env.sh"
     if [ -z "${LANGUAGETOOL_HOME:-}" ] || [ ! -f "${LANGUAGETOOL_HOME}/languagetool-commandline.jar" ]; then
       bash "${AUTOMATION_DIR}/install/doc-linters.sh" >/dev/null 2>&1 || true
     fi
@@ -101,7 +100,7 @@ export PATH="${DOC_LINT_INSTALL_DIR:-/tmp}:${PATH}"
 wait
 
 if command -v uv >/dev/null 2>&1; then
-  uv run --directory "${REPO_ROOT}/.github/docs-quality/tools/docs-dev" python \
+  uv run --directory "${DOCS_QUALITY_DIR}/tools/docs-dev" python \
     "${AUTOMATION_DIR}/bin/merge-template-list-vale.py" || true
 fi
 

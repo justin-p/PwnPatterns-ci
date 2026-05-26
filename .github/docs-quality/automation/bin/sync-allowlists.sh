@@ -6,4 +6,4 @@ set -euo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/env.sh"
 cd "${REPO_ROOT}"
 
-uv_run_tool .github/docs-quality/tools/sync-allowlists python sync_allowlists.py
+uv_run_tool "${DOCS_QUALITY_DIR}/tools/sync-allowlists" python sync_allowlists.py
