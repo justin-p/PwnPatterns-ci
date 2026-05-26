@@ -26,7 +26,9 @@ def run_shell(
     fix: bool = False,
     on_line: Callable[[str], None] | None = None,
 ) -> int:
-    env = {"CI_LINT_AUTOFIX": "true"} if fix else None
+    env: dict[str, str] = {"LINT_SHELL_INCLUDE_PLATFORM": "1"}
+    if fix:
+        env["CI_LINT_AUTOFIX"] = "true"
     script = ctx.automation_bin / "lint-shell.sh"
     if on_line:
         return stream_bash_script(ctx, script, env_extra=env, on_line=on_line)

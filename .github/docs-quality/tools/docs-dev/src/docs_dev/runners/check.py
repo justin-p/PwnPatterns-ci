@@ -36,6 +36,7 @@ class CheckOptions:
     fix: bool = False
     skip_lychee: bool = False
     skip_actionlint: bool = False
+    skip_shell: bool = False
     git_base: str = "origin/main"
     git_head: str = "HEAD"
 
@@ -380,6 +381,7 @@ def run_check(
             "fix": opts.fix,
             "skip_lychee": opts.skip_lychee,
             "skip_actionlint": opts.skip_actionlint,
+            "skip_shell": opts.skip_shell,
         },
     )
 
@@ -442,7 +444,10 @@ def run_check(
                 )
             )
 
-    report.steps.append(_run_shell(ctx, autofix=opts.fix, on_progress=on_progress))
+    if opts.skip_shell:
+        report.steps.append(StepResult(name="shell", status=StepStatus.SKIP))
+    else:
+        report.steps.append(_run_shell(ctx, autofix=opts.fix, on_progress=on_progress))
 
     if opts.skip_actionlint:
         report.steps.append(StepResult(name="actionlint", status=StepStatus.SKIP))
