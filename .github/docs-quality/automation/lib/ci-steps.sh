@@ -9,6 +9,8 @@ export CI_STEPS_LOADED=1
 
 # shellcheck source=env.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/env.sh"
+# shellcheck source=reviewdog-invoke.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/reviewdog-invoke.sh"
 
 _DQ_AUTOMATION_DIR="${AUTOMATION_DIR}"
 _DQ_DOCS_QUALITY_DIR="${DOCS_QUALITY_DIR}"
@@ -214,26 +216,7 @@ ci_verify_metadata() {
 }
 
 ci_report_reviewdog() {
-  local reporter fail_level filter_mode
-  reporter="$(ci_reviewdog_reporter)"
-  fail_level="$(ci_reviewdog_fail_level)"
-  filter_mode="$(ci_reviewdog_filter_mode)"
-
-  for tool in vale typos rumdl harper languagetool; do
-    log="${CI_LINT_LOG_DIR}/${tool}.json"
-    if [ ! -s "${log}" ]; then
-      continue
-    fi
-    bash "${AUTOMATION_DIR}/bin/prose-to-rdjsonl.sh" "${tool}" "${CI_LINT_LOG_DIR}" |
-      reviewdog -f=rdjsonl -name="${tool}" \
-        -reporter="${reporter}" -fail-level="${fail_level}" -filter-mode="${filter_mode}" || true
-  done
-
-  if [ -s "${CI_LINT_LOG_DIR}/metadata.rdjsonl" ]; then
-    reviewdog -f=rdjsonl -name=metadata \
-      -reporter="${reporter}" -fail-level="${fail_level}" -filter-mode="${filter_mode}" \
-      <"${CI_LINT_LOG_DIR}/metadata.rdjsonl" || true
-  fi
+  bash "${AUTOMATION_DIR}/bin/report-docs-quality-reviewdog.sh" "$(ci_reviewdog_reporter)"
 }
 
 ci_fail_content_linters() {

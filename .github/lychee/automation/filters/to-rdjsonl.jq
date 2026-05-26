@@ -1,5 +1,6 @@
 # lychee --format json -> reviewdog rdjsonl (one diagnostic per line).
 # Pinned for lychee v0.24.x (error_map keys are file paths; values are link result arrays).
+include "paths";
 include "lychee-message";
 
 def link_range($body):
@@ -28,7 +29,8 @@ def link_diag($path; $body):
 def map_diags($map):
   ($map // {})
   | to_entries[]
-  | .key as $path
+  | .key as $raw
+  | resolve_path($raw) as $path
   | (.value | if type == "array" then .[] else . end)
   | link_diag($path; .);
 

@@ -188,20 +188,18 @@ run_lint_job() {
   record_result harper "$(cat "${CI_LINT_LOG_DIR}/harper.exit")"
   record_result languagetool "$(cat "${CI_LINT_LOG_DIR}/languagetool.exit")"
 
-  ci_report_reviewdog
-
   ci_verify_metadata "${paths[@]}"
   record_result metadata "$(cat "${CI_LINT_LOG_DIR}/metadata.exit")"
-  ci_report_reviewdog
 
   if [ "${CI_E2E_SKIP_PREK}" = true ]; then
     echo "Skipping prek (CI_E2E_SKIP_PREK=true)"
     echo 0 >"${CI_LINT_LOG_DIR}/prek.exit"
   else
     ci_prek
-    ci_report_prek
   fi
   record_result prek "$(cat "${CI_LINT_LOG_DIR}/prek.exit")"
+  ci_report_reviewdog
+  ci_report_prek
 }
 
 run_lychee_job() {

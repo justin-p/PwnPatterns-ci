@@ -103,6 +103,8 @@ ci_lychee_report_reviewdog() {
     filter_mode=nofilter
   fi
   jq -r -L "${LYCHEE_JQ_LIB}" \
+    --arg repo_root "${REPO_ROOT:-${GITHUB_WORKSPACE:-}}" \
+    --argjson path_index "{}" \
     -f "${LYCHEE_TO_RDJSONL_JQ}" "${report}" |
     reviewdog -f=rdjsonl -name=lychee \
       -reporter="${reporter}" -fail-level="${fail_level}" -filter-mode="${filter_mode}" ||

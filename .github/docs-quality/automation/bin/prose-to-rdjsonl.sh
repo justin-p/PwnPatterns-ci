@@ -27,8 +27,9 @@ fi
 
 bash "${AUTOMATION_DIR}/bin/build-path-index.sh" "${LOG_DIR}"
 PATH_INDEX="$(cat "${IDX}")"
+REPO_ROOT="${GITHUB_WORKSPACE:-${REPO_ROOT:-}}"
 
-JQ_BASE=(-r -L "${LIB}" --argjson path_index "${PATH_INDEX}")
+JQ_BASE=(-r -L "${LIB}" --argjson path_index "${PATH_INDEX}" --arg repo_root "${REPO_ROOT}")
 case "${TOOL}" in
   harper)
     JQ_BASE+=(--argjson blocking "${HARPER_BLOCKING_PRIORITY:-127}")

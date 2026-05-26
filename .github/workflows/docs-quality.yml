@@ -134,24 +134,6 @@ jobs:
       - uses: reviewdog/action-setup@d8a7baabd7f3e8544ee4dbde3ee41d0011c3a93f # v1.5.0
         if: steps.targets.outputs.skip != 'true'
 
-      - name: Report prose linters (reviewdog)
-        if: steps.targets.outputs.skip != 'true'
-        env:
-          REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
-          LINT_LOG_DIR: ${{ github.workspace }}/lint-logs
-        run: |
-          set -eu
-          reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}"
-          for tool in vale typos textlint rumdl harper languagetool; do
-            log="${LINT_LOG_DIR}/${tool}.json"
-            if [ -s "${log}" ] && jq -e . "${log}" >/dev/null 2>&1; then
-              uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
-                pwnpatterns-ci ci prose-to-rdjsonl "${tool}" "${LINT_LOG_DIR}" \
-                | reviewdog -f=rdjsonl -name="${tool}" \
-                  -reporter="${reporter}" -fail-level=error -filter-mode=file || true
-            fi
-          done
-
       - name: Verify pattern metadata
         if: steps.targets.outputs.skip != 'true'
         continue-on-error: true
@@ -173,18 +155,6 @@ jobs:
           uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
             pwnpatterns-ci ci record-exits "${GITHUB_WORKSPACE}/lint-logs"
 
-      - name: Report metadata (reviewdog)
-        if: steps.targets.outputs.skip != 'true'
-        env:
-          REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
-        run: |
-          if [ -s "${GITHUB_WORKSPACE}/lint-logs/metadata.rdjsonl" ]; then
-            reviewdog -f=rdjsonl -name=metadata \
-              -reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}" \
-              -fail-level=error -filter-mode=file \
-              <"${GITHUB_WORKSPACE}/lint-logs/metadata.rdjsonl" || true
-          fi
-
       - name: Run prek
         if: steps.targets.outputs.skip != 'true'
         continue-on-error: true
@@ -195,14 +165,16 @@ jobs:
           echo "${PIPESTATUS[0]}" >"${GITHUB_WORKSPACE}/lint-logs/prek.exit"
           set -e
 
-      - name: Report prek (reviewdog)
+      - name: Report to reviewdog
         if: steps.targets.outputs.skip != 'true'
         continue-on-error: true
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
           CI_LINT_LOG_DIR: ${{ github.workspace }}/lint-logs
+          LINT_LOG_DIR: ${{ github.workspace }}/lint-logs
         run: |
           reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}"
+          bash "${DOCS_QUALITY_DIR}/automation/bin/report-docs-quality-reviewdog.sh" "${reporter}"
           bash "${DOCS_QUALITY_DIR}/automation/bin/report-prek-reviewdog.sh" "${reporter}"
 
       - name: Fail on content linters

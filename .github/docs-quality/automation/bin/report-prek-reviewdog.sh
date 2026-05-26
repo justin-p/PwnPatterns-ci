@@ -2,17 +2,20 @@
 # Send prek failure output to reviewdog (unified diff + parsed log lines).
 set -euo pipefail
 
-reporter="${1:?reviewdog reporter required (e.g. github-pr-review)}"
+# shellcheck source=../lib/env.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/env.sh"
+# shellcheck source=../lib/reviewdog-invoke.sh
+source "${AUTOMATION_DIR}/lib/reviewdog-invoke.sh"
+
+reporter="${1:-$(ci_reviewdog_reporter)}"
 lint_log_dir="${CI_LINT_LOG_DIR:-lint-logs}"
 exit_file="${2:-${lint_log_dir}/prek.exit}"
 log_file="${3:-${lint_log_dir}/prek.log}"
 
-fail_level="error"
-filter_mode="file"
+fail_level="$(ci_reviewdog_fail_level)"
+filter_mode="$(ci_reviewdog_filter_mode)"
 reviewdog_diff=()
 if [ "${reporter}" = local ]; then
-  fail_level=none
-  filter_mode=nofilter
   reviewdog_diff=(-diff="git diff")
 fi
 
