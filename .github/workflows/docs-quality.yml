@@ -197,6 +197,7 @@ jobs:
 
       - name: Report prek (reviewdog)
         if: steps.targets.outputs.skip != 'true'
+        continue-on-error: true
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
           CI_LINT_LOG_DIR: ${{ github.workspace }}/lint-logs

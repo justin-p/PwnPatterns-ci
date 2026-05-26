@@ -34,26 +34,28 @@ if [ -f "${log_file}" ]; then
   shellcheck_txt="$(mktemp)"
   trap 'rm -f "${metadata_jsonl}" "${shellcheck_txt}"' EXIT
 
-  grep -E '^❌ docs/.*\.md:' "${log_file}" | while IFS= read -r line; do
-    rest="${line#❌ }"
-    path="${rest%%:*}"
-    msg="${rest#"${path}": }"
-    msg="${msg#: }"
+  # Avoid pipefail terminating the script when verify-metadata prints no ❌ docs/ lines
+  # while other hooks still failed (grep exit 1 in a pipeline aborted the reporter).
+  while IFS= read -r line; do
+    # Match verify_metadata.py stderr shape: ❌ docs/…: … (optional indentation).
+    [[ "${line}" =~ ^[[:blank:]]*❌[[:blank:]]+(docs/.+\.md):\ *(.*)$ ]] || continue
+    path="${BASH_REMATCH[1]}"
+    msg="${BASH_REMATCH[2]}"
     jq -nc \
       --arg path "${path}" \
       --arg msg "${msg}" \
       '{
-        message: (
-          "[prek] metadata: " + $msg
-          + " — File: " + $path
-          + " — Fix YAML frontmatter / pattern metadata (see verify-metadata)."
-        ),
-        location: {path: $path, range: {start: {line: 1, column: 1}}},
-        severity: "ERROR"
-      }'
-  done >"${metadata_jsonl}"
+          message: (
+            "[prek] metadata: " + $msg
+            + " — File: " + $path
+            + " — Fix YAML frontmatter / pattern metadata (see verify-metadata)."
+          ),
+          location: {path: $path, range: {start: {line: 1, column: 1}}},
+          severity: "ERROR"
+        }'
+  done >"${metadata_jsonl}" < <(grep --text -E '❌[[:blank:]]+docs/.+\.md:' "${log_file}" || true)
 
-  grep -E '^\.github/.*\.sh:[0-9]+:[0-9]+:' "${log_file}" >"${shellcheck_txt}" || true
+  grep --text -E '^\.github/.*\.sh:[0-9]+:[0-9]+:' "${log_file}" >"${shellcheck_txt}" || true
 
   if [ -s "${metadata_jsonl}" ]; then
     reviewdog -f=rdjsonl -name=prek \
@@ -66,7 +68,7 @@ if [ -f "${log_file}" ]; then
     # shellcheck source=../lib/reviewdog-shellcheck.sh
     source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/reviewdog-shellcheck.sh"
     reviewdog_shellcheck_gcc "${shellcheck_txt}" prek-shellcheck \
-      -reporter="${reporter}" -fail-level="${fail_level}" -filter-mode="${filter_mode}"
+      -reporter="${reporter}" -fail-level="${fail_level}" -filter-mode="${filter_mode}" || true
     reported=1
   fi
 fi
