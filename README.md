@@ -1,4 +1,4 @@
-# ocd-nl/pwnpatterns-ci (platform export) 
+# ocd-nl/pwnpatterns-ci (platform export)
 
 Push this tree to the private **`ocd-nl/pwnpatterns-ci`** repository.
 
