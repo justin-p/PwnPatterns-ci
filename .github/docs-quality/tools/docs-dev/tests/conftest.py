@@ -65,7 +65,7 @@ def _mock_heavy_runners(monkeypatch: pytest.MonkeyPatch) -> None:
         _mock_e2e,
     )
 
-    def _mock_check(ctx, opts):
+    def _mock_check(ctx, opts, **_kwargs):
         return CheckReport(
             command="check",
             options={"changed": opts.changed},
@@ -79,7 +79,7 @@ def _mock_heavy_runners(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(
         "docs_dev.tui.screens.check_screen.run_prose_lint",
-        lambda ctx, paths: [],
+        lambda ctx, paths, **_kwargs: [],
     )
     monkeypatch.setattr(
         "docs_dev.tui.screens.check_screen.sync_allowlists",

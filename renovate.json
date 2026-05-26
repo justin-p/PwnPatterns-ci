@@ -87,13 +87,21 @@
   "postUpgradeTasks": [
     {
       "commands": [
-        "uv run --directory .github/docs-quality/tools/pwnpatterns-ci pwnpatterns-ci ci refresh-checksums"
+        "uv run --directory .github/docs-quality/tools/pwnpatterns-ci pwnpatterns-ci ci refresh-checksums",
+        "uv run --directory .github/docs-quality/tools/docs-dev pytest tests/test_manifest.py tests/test_allowlist.py tests/test_tui_e2e.py -q --tb=short"
       ],
       "fileFilters": [".github/docs-quality/config/manifest.env"],
       "executionMode": "update"
     }
   ],
   "packageRules": [
+    {
+      "description": "Doc-lint pins in manifest.env (docs-dev tests load versions from this file)",
+      "matchManagers": ["custom.regex"],
+      "matchFileNames": [".github/docs-quality/config/manifest.env"],
+      "groupName": "doc-lint-manifest",
+      "commitMessageTopic": "doc-lint manifest pins"
+    },
     {
       "matchUpdateTypes": ["major", "minor", "patch"],
       "automerge": false

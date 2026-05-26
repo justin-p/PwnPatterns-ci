@@ -30,8 +30,11 @@ from docs_dev.allowlist import (
     write_terms_file,
 )
 from docs_dev.context import RepoContext
-from docs_dev.manifest import Manifest
 from docs_dev.models import Finding
+
+from docs_dev.manifest import load_manifest
+
+from tests.manifest_fixtures import copy_platform_manifest_to
 
 
 def _finding(tool: str, message: str, rule: str | None = None) -> Finding:
@@ -256,6 +259,8 @@ def test_dual_casing_not_needed_for_foreign_substitution(tmp_path: Path) -> None
         "# header\nfor example For example\n",
         encoding="utf-8",
     )
+    copy_platform_manifest_to(docs_quality)
+    manifest_path = docs_quality / "config" / "manifest.env"
     ctx = RepoContext(
         repo_root=tmp_path,
         docs_quality_dir=docs_quality,
@@ -263,22 +268,8 @@ def test_dual_casing_not_needed_for_foreign_substitution(tmp_path: Path) -> None
         automation_dir=docs_quality / "automation",
         automation_bin=docs_quality / "automation" / "bin",
         automation_install=docs_quality / "automation" / "install",
-        manifest_path=docs_quality / "config" / "manifest.env",
-        manifest=Manifest(
-            doc_lint_install_dir="/tmp",
-            vale_version="3.9.1",
-            typos_version="1.29.0",
-            rumdl_version="0.1.78",
-            harper_version="2.1.0",
-            harper_user_dict="dict.txt",
-            harper_ignore_rules_file="ignore",
-            shellcheck_version="0.11.0",
-            shfmt_version="3.12.0",
-            reviewdog_version="0.20.3",
-            lychee_version="0.24.2",
-            actionlint_version="1.7.12",
-            raw={},
-        ),
+        manifest_path=manifest_path,
+        manifest=load_manifest(manifest_path),
         doc_lint_install_dir=tmp_path / "linters",
         lint_log_dir=tmp_path / "lint-logs",
         lychee_filter_jq=tmp_path / "filter.jq",
@@ -328,6 +319,8 @@ def test_add_term_appends_and_dedupes(tmp_path: Path) -> None:
     terms_file = docs_quality / "config" / "allowlists" / "terms.txt"
     terms_file.write_text("# terms\nexisting\n", encoding="utf-8")
 
+    copy_platform_manifest_to(docs_quality)
+    manifest_path = docs_quality / "config" / "manifest.env"
     ctx = RepoContext(
         repo_root=repo,
         docs_quality_dir=docs_quality,
@@ -335,22 +328,8 @@ def test_add_term_appends_and_dedupes(tmp_path: Path) -> None:
         automation_dir=docs_quality / "automation",
         automation_bin=docs_quality / "automation" / "bin",
         automation_install=docs_quality / "automation" / "install",
-        manifest_path=docs_quality / "config" / "manifest.env",
-        manifest=Manifest(
-            doc_lint_install_dir="/tmp",
-            vale_version="3.9.1",
-            typos_version="1.29.0",
-            rumdl_version="0.1.78",
-            harper_version="2.1.0",
-            harper_user_dict=".github/docs-quality/generated/harper-dictionary.txt",
-            harper_ignore_rules_file=".github/docs-quality/config/harper.ignore-rules",
-            shellcheck_version="0.11.0",
-            shfmt_version="3.12.0",
-            reviewdog_version="0.20.3",
-            lychee_version="0.24.2",
-            actionlint_version="1.7.12",
-            raw={},
-        ),
+        manifest_path=manifest_path,
+        manifest=load_manifest(manifest_path),
         doc_lint_install_dir=tmp_path / "linters",
         lint_log_dir=tmp_path / "lint-logs",
         lychee_filter_jq=tmp_path / "filter.jq",
@@ -366,6 +345,8 @@ def test_add_term_appends_and_dedupes(tmp_path: Path) -> None:
 
 
 def _make_allowlist_ctx(tmp_path: Path, docs_quality: Path) -> RepoContext:
+    copy_platform_manifest_to(docs_quality)
+    manifest_path = docs_quality / "config" / "manifest.env"
     return RepoContext(
         repo_root=tmp_path,
         docs_quality_dir=docs_quality,
@@ -373,22 +354,8 @@ def _make_allowlist_ctx(tmp_path: Path, docs_quality: Path) -> RepoContext:
         automation_dir=docs_quality / "automation",
         automation_bin=docs_quality / "automation" / "bin",
         automation_install=docs_quality / "automation" / "install",
-        manifest_path=docs_quality / "config" / "manifest.env",
-        manifest=Manifest(
-            doc_lint_install_dir="/tmp",
-            vale_version="3.9.1",
-            typos_version="1.29.0",
-            rumdl_version="0.1.78",
-            harper_version="2.1.0",
-            harper_user_dict=".github/docs-quality/generated/harper-dictionary.txt",
-            harper_ignore_rules_file=".github/docs-quality/config/harper.ignore-rules",
-            shellcheck_version="0.11.0",
-            shfmt_version="3.12.0",
-            reviewdog_version="0.20.3",
-            lychee_version="0.24.2",
-            actionlint_version="1.7.12",
-            raw={},
-        ),
+        manifest_path=manifest_path,
+        manifest=load_manifest(manifest_path),
         doc_lint_install_dir=tmp_path / "linters",
         lint_log_dir=tmp_path / "lint-logs",
         lychee_filter_jq=tmp_path / "filter.jq",

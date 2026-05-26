@@ -14,6 +14,8 @@ from docs_dev.tui.screens.home import HomeScreen
 from docs_dev.tui.screens.tools_screen import ToolsScreen
 from docs_dev.tui.worker_screen import WorkerScreen
 
+from tests.manifest_fixtures import tui_check_repo_context
+
 
 class DocsDevTestApp(DocsDevApp):
     """Always start on home (ignore sys.argv from pytest)."""
@@ -207,7 +209,7 @@ async def test_allowlist_rescan_does_not_crash_files_table(monkeypatch) -> None:
     )
     other = "docs/workstation/general/Unrestricted_Command_Line_Interface_Access/Unrestricted_Command_Line_Interface_Access.md"
 
-    def mock_check(_ctx, _opts):
+    def mock_check(_ctx, _opts, **_kwargs):
         return CheckReport(
             steps=[StepResult("prose lint", StepStatus.FAIL)],
             files=[
@@ -242,7 +244,7 @@ async def test_allowlist_rescan_does_not_crash_files_table(monkeypatch) -> None:
             ],
         )
 
-    def mock_prose(_ctx, paths):
+    def mock_prose(_ctx, paths, **_kwargs):
         assert paths == [tiering]
         return [
             Finding(
@@ -325,10 +327,6 @@ async def test_allowlist_rescan_does_not_crash_files_table(monkeypatch) -> None:
 async def test_check_screen_editor_jumps_to_finding_line(
     monkeypatch, tmp_path: Path
 ) -> None:
-    from pathlib import Path
-
-    from docs_dev.context import RepoContext
-    from docs_dev.manifest import Manifest
     from docs_dev.models import (
         CheckReport,
         FileFindings,
@@ -343,7 +341,7 @@ async def test_check_screen_editor_jumps_to_finding_line(
     lines = ["# Title", "", "line two", "", "line four"]
     doc_abs.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    def mock_check(ctx, _opts):
+    def mock_check(ctx, _opts, **_kwargs):
         return CheckReport(
             steps=[StepResult("prose lint", StepStatus.FAIL)],
             files=[
@@ -374,46 +372,9 @@ async def test_check_screen_editor_jumps_to_finding_line(
     monkeypatch.setattr(
         "docs_dev.tui.screens.check_screen.run_check", mock_check
     )
-
-    docs_quality = tmp_path / ".github" / "docs-quality"
-    docs_quality.mkdir(parents=True)
-    (docs_quality / "config" / "allowlists").mkdir(parents=True, exist_ok=True)
-    (docs_quality / "config" / "allowlists" / "terms.txt").write_text(
-        "# terms\n", encoding="utf-8"
-    )
-    (docs_quality / "config" / "allowlists" / "canonical-casing.txt").write_text(
-        "# casing\n", encoding="utf-8"
-    )
-
-    ctx = RepoContext(
-        repo_root=tmp_path,
-        docs_quality_dir=docs_quality,
-        consumer_config_dir=docs_quality / "config",
-        automation_dir=docs_quality / "automation",
-        automation_bin=docs_quality / "automation" / "bin",
-        automation_install=docs_quality / "automation" / "install",
-        manifest_path=docs_quality / "config" / "manifest.env",
-        manifest=Manifest(
-            doc_lint_install_dir="/tmp",
-            vale_version="3.9.1",
-            typos_version="1.29.0",
-            rumdl_version="0.1.78",
-            harper_version="2.1.0",
-            harper_user_dict="dict.txt",
-            harper_ignore_rules_file="ignore",
-            shellcheck_version="0.11.0",
-            shfmt_version="3.12.0",
-            reviewdog_version="0.20.3",
-            lychee_version="0.24.2",
-            actionlint_version="1.7.12",
-            raw={},
-        ),
-        doc_lint_install_dir=tmp_path / "linters",
-        lint_log_dir=tmp_path / "lint-logs",
-        lychee_filter_jq=tmp_path / "filter.jq",
-    )
     monkeypatch.setattr(
-        "docs_dev.tui.screens.check_screen.RepoContext.from_env", lambda: ctx
+        "docs_dev.tui.screens.check_screen.RepoContext.from_env",
+        lambda: tui_check_repo_context(tmp_path),
     )
 
     app = DocsDevTestApp()
@@ -475,8 +436,6 @@ async def _dismiss_save_modal(pilot, *, save: bool) -> None:
 async def test_check_screen_editor_prompts_save_on_file_change(
     monkeypatch, tmp_path: Path
 ) -> None:
-    from docs_dev.context import RepoContext
-    from docs_dev.manifest import Manifest
     from docs_dev.models import (
         CheckReport,
         FileFindings,
@@ -501,7 +460,7 @@ async def test_check_screen_editor_prompts_save_on_file_change(
             message="issue",
         )
 
-    def mock_check(ctx, _opts):
+    def mock_check(ctx, _opts, **_kwargs):
         return CheckReport(
             steps=[StepResult("prose lint", StepStatus.FAIL)],
             files=[
@@ -513,46 +472,9 @@ async def test_check_screen_editor_prompts_save_on_file_change(
     monkeypatch.setattr(
         "docs_dev.tui.screens.check_screen.run_check", mock_check
     )
-
-    docs_quality = tmp_path / ".github" / "docs-quality"
-    docs_quality.mkdir(parents=True)
-    (docs_quality / "config" / "allowlists").mkdir(parents=True, exist_ok=True)
-    (docs_quality / "config" / "allowlists" / "terms.txt").write_text(
-        "# terms\n", encoding="utf-8"
-    )
-    (docs_quality / "config" / "allowlists" / "canonical-casing.txt").write_text(
-        "# casing\n", encoding="utf-8"
-    )
-
-    ctx = RepoContext(
-        repo_root=tmp_path,
-        docs_quality_dir=docs_quality,
-        consumer_config_dir=docs_quality / "config",
-        automation_dir=docs_quality / "automation",
-        automation_bin=docs_quality / "automation" / "bin",
-        automation_install=docs_quality / "automation" / "install",
-        manifest_path=docs_quality / "config" / "manifest.env",
-        manifest=Manifest(
-            doc_lint_install_dir="/tmp",
-            vale_version="3.9.1",
-            typos_version="1.29.0",
-            rumdl_version="0.1.78",
-            harper_version="2.1.0",
-            harper_user_dict="dict.txt",
-            harper_ignore_rules_file="ignore",
-            shellcheck_version="0.11.0",
-            shfmt_version="3.12.0",
-            reviewdog_version="0.20.3",
-            lychee_version="0.24.2",
-            actionlint_version="1.7.12",
-            raw={},
-        ),
-        doc_lint_install_dir=tmp_path / "linters",
-        lint_log_dir=tmp_path / "lint-logs",
-        lychee_filter_jq=tmp_path / "filter.jq",
-    )
     monkeypatch.setattr(
-        "docs_dev.tui.screens.check_screen.RepoContext.from_env", lambda: ctx
+        "docs_dev.tui.screens.check_screen.RepoContext.from_env",
+        lambda: tui_check_repo_context(tmp_path),
     )
 
     app = DocsDevTestApp()
@@ -586,8 +508,6 @@ async def test_check_screen_editor_prompts_save_on_file_change(
 async def test_check_screen_editor_prompt_discard_on_close(
     monkeypatch, tmp_path: Path
 ) -> None:
-    from docs_dev.context import RepoContext
-    from docs_dev.manifest import Manifest
     from docs_dev.models import (
         CheckReport,
         FileFindings,
@@ -602,7 +522,7 @@ async def test_check_screen_editor_prompt_discard_on_close(
     original = "# Title\n\nbody\n"
     doc_abs.write_text(original, encoding="utf-8")
 
-    def mock_check(ctx, _opts):
+    def mock_check(ctx, _opts, **_kwargs):
         return CheckReport(
             steps=[StepResult("prose lint", StepStatus.FAIL)],
             files=[
@@ -625,46 +545,9 @@ async def test_check_screen_editor_prompt_discard_on_close(
     monkeypatch.setattr(
         "docs_dev.tui.screens.check_screen.run_check", mock_check
     )
-
-    docs_quality = tmp_path / ".github" / "docs-quality"
-    docs_quality.mkdir(parents=True)
-    (docs_quality / "config" / "allowlists").mkdir(parents=True, exist_ok=True)
-    (docs_quality / "config" / "allowlists" / "terms.txt").write_text(
-        "# terms\n", encoding="utf-8"
-    )
-    (docs_quality / "config" / "allowlists" / "canonical-casing.txt").write_text(
-        "# casing\n", encoding="utf-8"
-    )
-
-    ctx = RepoContext(
-        repo_root=tmp_path,
-        docs_quality_dir=docs_quality,
-        consumer_config_dir=docs_quality / "config",
-        automation_dir=docs_quality / "automation",
-        automation_bin=docs_quality / "automation" / "bin",
-        automation_install=docs_quality / "automation" / "install",
-        manifest_path=docs_quality / "config" / "manifest.env",
-        manifest=Manifest(
-            doc_lint_install_dir="/tmp",
-            vale_version="3.9.1",
-            typos_version="1.29.0",
-            rumdl_version="0.1.78",
-            harper_version="2.1.0",
-            harper_user_dict="dict.txt",
-            harper_ignore_rules_file="ignore",
-            shellcheck_version="0.11.0",
-            shfmt_version="3.12.0",
-            reviewdog_version="0.20.3",
-            lychee_version="0.24.2",
-            actionlint_version="1.7.12",
-            raw={},
-        ),
-        doc_lint_install_dir=tmp_path / "linters",
-        lint_log_dir=tmp_path / "lint-logs",
-        lychee_filter_jq=tmp_path / "filter.jq",
-    )
     monkeypatch.setattr(
-        "docs_dev.tui.screens.check_screen.RepoContext.from_env", lambda: ctx
+        "docs_dev.tui.screens.check_screen.RepoContext.from_env",
+        lambda: tui_check_repo_context(tmp_path),
     )
 
     app = DocsDevTestApp()
@@ -699,7 +582,7 @@ async def test_check_screen_file_filter(monkeypatch) -> None:
         StepStatus,
     )
 
-    def mock_check(_ctx, _opts):
+    def mock_check(_ctx, _opts, **_kwargs):
         return CheckReport(
             steps=[StepResult("prose lint", StepStatus.FAIL)],
             files=[
@@ -776,7 +659,7 @@ async def test_check_screen_recheck_file_button(monkeypatch) -> None:
 
     recheck_paths: list[str] = []
 
-    def mock_check(_ctx, _opts):
+    def mock_check(_ctx, _opts, **_kwargs):
         return CheckReport(
             steps=[StepResult("prose lint", StepStatus.PASS)],
             files=[
@@ -809,7 +692,7 @@ async def test_check_screen_recheck_file_button(monkeypatch) -> None:
             ],
         )
 
-    def mock_prose(_ctx, paths):
+    def mock_prose(_ctx, paths, **_kwargs):
         recheck_paths.extend(paths)
         return []
 
@@ -863,7 +746,7 @@ async def test_check_screen_recheck_focuses_first_finding(monkeypatch) -> None:
 
     path = "docs/example.md"
 
-    def mock_check(_ctx, _opts):
+    def mock_check(_ctx, _opts, **_kwargs):
         return CheckReport(
             steps=[StepResult("prose lint", StepStatus.FAIL)],
             files=[
@@ -883,7 +766,7 @@ async def test_check_screen_recheck_focuses_first_finding(monkeypatch) -> None:
             ],
         )
 
-    def mock_prose(_ctx, paths):
+    def mock_prose(_ctx, paths, **_kwargs):
         return [
             Finding(
                 tool="harper",
