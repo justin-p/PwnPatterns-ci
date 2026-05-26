@@ -43,7 +43,10 @@ def blank_bbcode_color_lines(text: str) -> str:
         body = line.rstrip("\r\n")
         newline = line[len(body) :]
         if BBCODE_COLOR_OPEN_RE.search(body):
-            out.append(" " * len(body) + newline)
+            # Replace the entire line body with nothing but the newline.
+            # If we replaced with spaces (same length), LanguageTool's
+            # WHITESPACE_RULE could still trigger on the long whitespace run.
+            out.append(newline)
         else:
             out.append(line)
     return "".join(out)

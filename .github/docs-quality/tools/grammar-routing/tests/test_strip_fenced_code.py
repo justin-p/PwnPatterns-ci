@@ -33,7 +33,7 @@ def test_prepare_md_blanks_lines_with_bbcode_color_callout() -> None:
     assert "Let op" not in body
     assert "Idealiter" not in body
     lines = body.splitlines()
-    assert lines[0].strip() == ""
+    assert lines[0] == ""
     assert lines[1] == "Normal prose line."
 
 
