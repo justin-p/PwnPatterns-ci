@@ -11,12 +11,18 @@ AUTOMATION_DIR="${REPO_ROOT}/.github/docs-quality/automation"
 
 mapfile -t paths < <(bash "${AUTOMATION_DIR}/bin/load-doc-paths.sh")
 
-grammar_smoke=".github/tests/fixtures/nl-languagetool-smoke.md"
-if [ -f "${REPO_ROOT}/${grammar_smoke}" ]; then
-  if [ "${#paths[@]}" -eq 0 ] || ! printf '%s\n' "${paths[@]}" | grep -qxF "${grammar_smoke}"; then
-    paths+=("${grammar_smoke}")
+_grammar_smoke_candidates=(
+  ".github/pwnpatterns-ci/.github/tests/fixtures/nl-languagetool-smoke.md"
+  ".github/tests/fixtures/nl-languagetool-smoke.md"
+)
+for grammar_smoke in "${_grammar_smoke_candidates[@]}"; do
+  if [ -f "${REPO_ROOT}/${grammar_smoke}" ]; then
+    if [ "${#paths[@]}" -eq 0 ] || ! printf '%s\n' "${paths[@]}" | grep -qxF "${grammar_smoke}"; then
+      paths+=("${grammar_smoke}")
+    fi
+    break
   fi
-fi
+done
 
 if [ "${#paths[@]}" -eq 0 ]; then
   echo "run-parallel-prose-lint: no documentation paths to lint" >&2

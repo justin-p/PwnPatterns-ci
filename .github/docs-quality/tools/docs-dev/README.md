@@ -7,13 +7,14 @@ Local documentation quality CLI for PwnPatterns.
 From the repository root:
 
 ```bash
-./scripts/docs-dev.sh                    # Textual TUI (setup, check, tools submenu)
-./scripts/docs-dev.sh --changed          # TUI opens “lint changed docs” directly
-./scripts/docs-dev.sh --no-ui            # CLI check (all docs)
-./scripts/docs-dev.sh --no-ui --changed --format json
-./scripts/docs-dev.sh web                # same TUI in a browser (textual-serve)
-./scripts/docs-dev.sh check              # CLI: lint changed docs vs origin/main
-./scripts/docs-dev.sh setup              # CLI: install pinned tools + prek hooks
+./scripts/ensure-platform.sh             # pattern repo bootstrap (vendored script)
+./.github/pwnpatterns-ci/scripts/docs-dev.sh                    # Textual TUI (setup, check, tools submenu)
+./.github/pwnpatterns-ci/scripts/docs-dev.sh --changed          # TUI opens “lint changed docs” directly
+./.github/pwnpatterns-ci/scripts/docs-dev.sh --no-ui            # CLI check (all docs)
+./.github/pwnpatterns-ci/scripts/docs-dev.sh --no-ui --changed --format json
+./.github/pwnpatterns-ci/scripts/docs-dev.sh web                # same TUI in a browser (textual-serve)
+./.github/pwnpatterns-ci/scripts/docs-dev.sh check              # CLI: lint changed docs vs origin/main
+./.github/pwnpatterns-ci/scripts/docs-dev.sh setup              # CLI: install pinned tools + prek hooks
 ```
 
 **Web UI:** run `./scripts/docs-dev.sh web`, open http://127.0.0.1:8765/, click the **docs-dev** tile to start the session. Override bind address with `--host` / `--port` or `DOCS_DEV_WEB_HOST` / `DOCS_DEV_WEB_PORT`.

@@ -67,11 +67,25 @@ def load_language_tools_config(path: Path) -> dict[str, Any]:
     return cfg
 
 
+def _platform_grammar_smoke_rel(repo: Path) -> str | None:
+    for rel in (
+        ".github/pwnpatterns-ci/.github/tests/fixtures/nl-languagetool-smoke.md",
+        ".github/tests/fixtures/nl-languagetool-smoke.md",
+    ):
+        if (repo / rel).is_file():
+            return rel
+    return None
+
+
 def merge_lint_paths(paths: list[str], cfg: dict[str, Any], repo: Path) -> list[str]:
     """Union explicit lint targets with configured grammar smoke fixtures."""
     merged: list[str] = []
     seen: set[str] = set()
-    for rel in [*paths, *(cfg.get("grammar_smoke_paths") or [])]:
+    smoke_extra = _platform_grammar_smoke_rel(repo)
+    smoke_paths = list(cfg.get("grammar_smoke_paths") or [])
+    if smoke_extra and smoke_extra not in smoke_paths:
+        smoke_paths.append(smoke_extra)
+    for rel in [*paths, *smoke_paths]:
         rel = rel.strip()
         if not rel or rel in seen:
             continue
