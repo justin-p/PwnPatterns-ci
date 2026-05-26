@@ -14,6 +14,24 @@ from route_grammar_paths import (
 )
 
 
+def test_load_config_after_languagetool_codes_section(tmp_path: Path) -> None:
+    cfg_path = tmp_path / "language-tools.yml"
+    cfg_path.write_text(
+        """default_language: en
+grammar_tools:
+  en: harper
+languagetool_codes:
+  en: en
+languagetool_enabled: false
+grammar_from_frontmatter: false
+""",
+        encoding="utf-8",
+    )
+    cfg = load_language_tools_config(cfg_path)
+    assert cfg["languagetool_enabled"] is False
+    assert cfg["grammar_from_frontmatter"] is False
+
+
 def test_load_default_config(tmp_path: Path) -> None:
     cfg = load_language_tools_config(tmp_path / "missing.yml")
     assert cfg["default_language"] == "en"

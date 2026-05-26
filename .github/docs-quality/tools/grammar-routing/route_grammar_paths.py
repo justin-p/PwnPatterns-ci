@@ -53,10 +53,12 @@ def load_language_tools_config(path: Path) -> dict[str, Any]:
         if section == "grammar_smoke_paths" and line.startswith("  - "):
             cfg["grammar_smoke_paths"].append(line[4:].strip().strip("\"'"))
             continue
-        if ":" in line and section is None:
+        # Top-level scalars (column 0); ends an open grammar_tools / languagetool_codes section.
+        if ":" in line and not line.startswith(" "):
             key, value = line.split(":", 1)
             key = key.strip()
             value = value.strip().strip("\"'")
+            section = None
             if key in ("languagetool_enabled", "grammar_from_frontmatter"):
                 cfg[key] = value.lower() in ("true", "yes", "1")
             elif key in ("default_language", "fallback_tool"):
