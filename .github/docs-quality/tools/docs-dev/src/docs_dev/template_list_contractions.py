@@ -142,9 +142,14 @@ def merge_into_vale_json(repo_root: Path, paths: list[str], vale_json: Path) -> 
 
     data: dict = {}
     if vale_json.is_file():
-        loaded = json.loads(vale_json.read_text(encoding="utf-8"))
-        if isinstance(loaded, dict):
-            data = loaded
+        raw = vale_json.read_text(encoding="utf-8").strip()
+        if raw:
+            try:
+                loaded = json.loads(raw)
+            except json.JSONDecodeError:
+                loaded = None
+            if isinstance(loaded, dict):
+                data = loaded
 
     for file_path, alerts in hits_to_vale_alerts(hits).items():
         existing = data.setdefault(file_path, [])

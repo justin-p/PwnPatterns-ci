@@ -8,6 +8,7 @@ from route_grammar_paths import (
     grammar_tool_for_language,
     load_language_tools_config,
     merge_lint_paths,
+    read_grammar_language,
     route_paths,
     write_route_outputs,
 )
@@ -67,3 +68,36 @@ def test_route_paths_by_language(tmp_path: Path) -> None:
     assert len(routed["languagetool"]) == 1
     assert routed["languagetool"][0]["path"] == "docs/nl.md"
     assert routed["languagetool"][0]["lt_code"] == "nl"
+
+
+def test_grammar_from_frontmatter_false_uses_default(tmp_path: Path) -> None:
+    repo = tmp_path
+    docs = repo / "docs"
+    docs.mkdir()
+    mislabeled = docs / "english-with-nl-tag.md"
+    mislabeled.write_text(
+        '---\nlanguage: "nl"\ntitle: "t"\n---\n\nEnglish body text.\n',
+        encoding="utf-8",
+    )
+    cfg = load_language_tools_config(Path("/nonexistent"))
+    cfg["grammar_from_frontmatter"] = False
+    cfg["default_language"] = "en"
+    routed = route_paths(["docs/english-with-nl-tag.md"], cfg, repo)
+    assert routed["harper"] == ["docs/english-with-nl-tag.md"]
+    assert routed["languagetool"] == []
+
+
+def test_grammar_language_override_when_frontmatter_disabled(tmp_path: Path) -> None:
+    repo = tmp_path
+    docs = repo / "docs"
+    docs.mkdir()
+    nl_doc = docs / "dutch.md"
+    nl_doc.write_text(
+        '---\nlanguage: "en"\ngrammar_language: "nl"\n---\n\nNederlandse tekst.\n',
+        encoding="utf-8",
+    )
+    cfg = load_language_tools_config(Path("/nonexistent"))
+    cfg["grammar_from_frontmatter"] = False
+    assert read_grammar_language(Path("docs/dutch.md"), repo, cfg) == "nl"
+    routed = route_paths(["docs/dutch.md"], cfg, repo)
+    assert len(routed["languagetool"]) == 1

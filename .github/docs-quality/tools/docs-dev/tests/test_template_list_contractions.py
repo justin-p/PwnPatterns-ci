@@ -1,6 +1,7 @@
+import json
 from pathlib import Path
 
-from docs_dev.template_list_contractions import apply_fixes, scan_file
+from docs_dev.template_list_contractions import apply_fixes, merge_into_vale_json, scan_file
 
 
 def test_detects_it_is_in_yaml_list_block(tmp_path: Path) -> None:
@@ -26,6 +27,13 @@ def test_ignores_plain_prose_outside_fence(tmp_path: Path) -> None:
     md.parent.mkdir(parents=True)
     md.write_text("Plain it's here.\n", encoding="utf-8")
     assert scan_file(tmp_path, rel) == []
+
+
+def test_merge_into_vale_json_tolerates_empty_vale_file(tmp_path: Path) -> None:
+    vale_json = tmp_path / "vale.json"
+    vale_json.write_text("", encoding="utf-8")
+    assert merge_into_vale_json(tmp_path, [], vale_json) is False
+    assert json.loads(vale_json.read_text(encoding="utf-8")) == {}
 
 
 def test_apply_fix_in_list_block(tmp_path: Path) -> None:

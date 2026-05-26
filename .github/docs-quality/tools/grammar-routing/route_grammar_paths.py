@@ -18,6 +18,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "grammar_tools": {"en": "harper", "nl": "languagetool"},
     "languagetool_codes": {"nl": "nl", "fr": "fr", "de": "de-DE", "en": "en-US"},
     "languagetool_enabled": True,
+    "grammar_from_frontmatter": True,
     "grammar_smoke_paths": [".github/tests/fixtures/nl-languagetool-smoke.md"],
 }
 
@@ -56,7 +57,7 @@ def load_language_tools_config(path: Path) -> dict[str, Any]:
             key, value = line.split(":", 1)
             key = key.strip()
             value = value.strip().strip("\"'")
-            if key == "languagetool_enabled":
+            if key in ("languagetool_enabled", "grammar_from_frontmatter"):
                 cfg[key] = value.lower() in ("true", "yes", "1")
             elif key in ("default_language", "fallback_tool"):
                 cfg[key] = value
@@ -81,10 +82,13 @@ def merge_lint_paths(paths: list[str], cfg: dict[str, Any], repo: Path) -> list[
     """Union explicit lint targets with configured grammar smoke fixtures."""
     merged: list[str] = []
     seen: set[str] = set()
-    smoke_extra = _platform_grammar_smoke_rel(repo)
-    smoke_paths = list(cfg.get("grammar_smoke_paths") or [])
-    if smoke_extra and smoke_extra not in smoke_paths:
-        smoke_paths.append(smoke_extra)
+    smoke_paths: list[str] = []
+    smoke_extra: str | None = None
+    if cfg.get("languagetool_enabled", True):
+        smoke_extra = _platform_grammar_smoke_rel(repo)
+        smoke_paths = list(cfg.get("grammar_smoke_paths") or [])
+        if smoke_extra and smoke_extra not in smoke_paths:
+            smoke_paths.append(smoke_extra)
     for rel in [*paths, *smoke_paths]:
         rel = rel.strip()
         if not rel or rel in seen:
@@ -96,7 +100,7 @@ def merge_lint_paths(paths: list[str], cfg: dict[str, Any], repo: Path) -> list[
     return merged
 
 
-def read_frontmatter_language(file_path: Path, repo: Path) -> str | None:
+def _read_frontmatter_field(file_path: Path, repo: Path, field: str) -> str | None:
     full = repo / file_path if not file_path.is_absolute() else file_path
     if not full.is_file():
         return None
@@ -104,11 +108,23 @@ def read_frontmatter_language(file_path: Path, repo: Path) -> str | None:
     match = FRONTMATTER_RE.match(text)
     if not match:
         return None
+    prefix = f"{field}:"
     for line in match.group(1).split("\n"):
         stripped = line.strip()
-        if stripped.startswith("language:"):
+        if stripped.startswith(prefix):
             return stripped.split(":", 1)[1].strip().strip("\"'")
     return None
+
+
+def read_frontmatter_language(file_path: Path, repo: Path) -> str | None:
+    return _read_frontmatter_field(file_path, repo, "language")
+
+
+def read_grammar_language(file_path: Path, repo: Path, cfg: dict[str, Any]) -> str | None:
+    """Language used for grammar-tool routing (may differ from catalog ``language``)."""
+    if cfg.get("grammar_from_frontmatter", True):
+        return read_frontmatter_language(file_path, repo)
+    return _read_frontmatter_field(file_path, repo, "grammar_language")
 
 
 def grammar_tool_for_language(lang: str | None, cfg: dict[str, Any]) -> str:
@@ -140,7 +156,7 @@ def route_paths(
         rel = rel.strip()
         if not rel:
             continue
-        lang = read_frontmatter_language(Path(rel), repo)
+        lang = read_grammar_language(Path(rel), repo, cfg)
         tool = grammar_tool_for_language(lang, cfg)
         if tool == "harper":
             harper.append(rel)

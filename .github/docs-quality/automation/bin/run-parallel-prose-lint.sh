@@ -12,18 +12,25 @@ LOG_DIR="${1:-lint-logs}"
 
 mapfile -t paths < <(bash "${AUTOMATION_DIR}/bin/load-doc-paths.sh")
 
-_grammar_smoke_candidates=(
-  ".github/pwnpatterns-ci/.github/tests/fixtures/nl-languagetool-smoke.md"
-  ".github/tests/fixtures/nl-languagetool-smoke.md"
-)
-for grammar_smoke in "${_grammar_smoke_candidates[@]}"; do
-  if [ -f "${REPO_ROOT}/${grammar_smoke}" ]; then
-    if [ "${#paths[@]}" -eq 0 ] || ! printf '%s\n' "${paths[@]}" | grep -qxF "${grammar_smoke}"; then
-      paths+=("${grammar_smoke}")
+_lt_cfg="${REPO_ROOT}/.github/docs-quality/config/language-tools.yml"
+_lt_enabled=1
+if [ -f "${_lt_cfg}" ] && grep -qiE '^languagetool_enabled:[[:space:]]*(false|no|0)[[:space:]]*$' "${_lt_cfg}"; then
+  _lt_enabled=0
+fi
+if [ "${_lt_enabled}" -eq 1 ]; then
+  _grammar_smoke_candidates=(
+    ".github/pwnpatterns-ci/.github/tests/fixtures/nl-languagetool-smoke.md"
+    ".github/tests/fixtures/nl-languagetool-smoke.md"
+  )
+  for grammar_smoke in "${_grammar_smoke_candidates[@]}"; do
+    if [ -f "${REPO_ROOT}/${grammar_smoke}" ]; then
+      if [ "${#paths[@]}" -eq 0 ] || ! printf '%s\n' "${paths[@]}" | grep -qxF "${grammar_smoke}"; then
+        paths+=("${grammar_smoke}")
+      fi
+      break
     fi
-    break
-  fi
-done
+  done
+fi
 
 if [ "${#paths[@]}" -eq 0 ]; then
   echo "run-parallel-prose-lint: no documentation paths to lint" >&2
@@ -50,6 +57,9 @@ export PATH="${DOC_LINT_INSTALL_DIR:-/tmp}:${PATH}"
   echo "==> vale"
   set +e
   vale --output=JSON "${paths[@]}" >"${LOG_DIR}/vale.json" 2>"${LOG_DIR}/vale.stderr"
+  if [ ! -s "${LOG_DIR}/vale.json" ]; then
+    echo '{}' >"${LOG_DIR}/vale.json"
+  fi
   set -e
 ) &
 (
