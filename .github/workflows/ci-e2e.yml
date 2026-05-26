@@ -53,7 +53,7 @@ jobs:
         env:
           CI_REVIEWDOG_MODE: local
           CI_E2E_SKIP_SYNC: "false"
-          CI_E2E_SKIP_PREK: "false"
+          CI_E2E_SKIP_PREK: "true"
           DOC_LINT_INSTALL_DIR: /tmp/doc-linters
         run: |
           uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \

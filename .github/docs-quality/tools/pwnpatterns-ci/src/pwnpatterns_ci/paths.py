@@ -10,6 +10,20 @@ from pathlib import Path
 def _find_repo_root(start: Path | None = None) -> Path:
     if os.environ.get("REPO_ROOT"):
         return Path(os.environ["REPO_ROOT"]).resolve()
+    if os.environ.get("GITHUB_WORKSPACE"):
+        return Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+    dq_env = os.environ.get("DOCS_QUALITY_DIR")
+    if dq_env:
+        dq = Path(dq_env).resolve()
+        # Consumer checkout: .../repo/.github/pwnpatterns-ci/.github/docs-quality
+        if (
+            dq.name == "docs-quality"
+            and dq.parent.name == ".github"
+            and dq.parent.parent.name == "pwnpatterns-ci"
+        ):
+            consumer = dq.parent.parent.parent.parent
+            if (consumer / ".github" / "platform.ref").is_file():
+                return consumer
     cur = (start or Path.cwd()).resolve()
     for parent in [cur, *cur.parents]:
         if (parent / ".git").exists():
