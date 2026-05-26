@@ -21,15 +21,20 @@ def test_strip_fenced_code_preserves_line_numbers() -> None:
     assert lines[6] == "After fence."
 
 
-def test_prepare_md_strips_bbcode_tags_but_keeps_text() -> None:
+def test_prepare_md_blanks_lines_with_bbcode_color_callout() -> None:
     raw = (
         "---\r\nlanguage: nl\r\n---\r\n"
         "[color=sl-orange][b]Let op[/b][/color]: Idealiter ...\n"
+        "Normal prose line.\n"
     )
     body, offset = prepare_md_for_languagetool(raw)
     assert offset == 3
     assert "sl-orange" not in body
-    assert "Let op" in body
+    assert "Let op" not in body
+    assert "Idealiter" not in body
+    lines = body.splitlines()
+    assert lines[0].strip() == ""
+    assert lines[1] == "Normal prose line."
 
 
 def test_prepare_md_blanks_html_comments_preserving_newlines() -> None:

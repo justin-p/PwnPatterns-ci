@@ -4,7 +4,9 @@ This module aims to keep LanguageTool results focused on human prose by:
 - stripping YAML frontmatter (metadata)
 - blanking fenced code blocks (keep line count)
 - blanking HTML comments (keep line breaks)
-- removing BBCode-style tags used in docs (e.g. [color=red][b]...[/b][/color])
+- blanking lines that use BBCode color callouts (e.g. [color=sl-orange]... so LT does not
+  see label text like "Let op :")
+- removing remaining BBCode-style tags on other lines (e.g. [b]...[/b])
 
 The transformations preserve line breaks so line numbers remain stable.
 """
@@ -26,6 +28,25 @@ BBCODE_TAG_RE = re.compile(
     r"\[(?:/?b|/?i|/?color(?:=[^\]]+)?|/?color(?:=\"[^\"]+\")?)\]",
     re.IGNORECASE,
 )
+
+# Opening [color markers on a line denote a formatted callout; blank the whole line for LT
+# so stripping tags alone cannot leave typography like "Let op :" for Dutch punctuation rules.
+BBCODE_COLOR_OPEN_RE = re.compile(r"\[color", re.IGNORECASE)
+
+
+def blank_bbcode_color_lines(text: str) -> str:
+    """Replace each line containing a [color opener with spaces (preserve line endings)."""
+
+    lines = text.splitlines(keepends=True)
+    out: list[str] = []
+    for line in lines:
+        body = line.rstrip("\r\n")
+        newline = line[len(body) :]
+        if BBCODE_COLOR_OPEN_RE.search(body):
+            out.append(" " * len(body) + newline)
+        else:
+            out.append(line)
+    return "".join(out)
 
 
 def prose_body_and_line_offset(text: str) -> tuple[str, int]:
@@ -88,6 +109,7 @@ def prepare_md_for_languagetool(full_text: str) -> tuple[str, int]:
     body, line_offset = prose_body_and_line_offset(full_text)
     body = strip_fenced_code_blocks(body)
     body = strip_html_comments(body)
+    body = blank_bbcode_color_lines(body)
     body = strip_bbcode_tags(body)
     return body, line_offset
 
