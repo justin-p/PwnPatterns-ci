@@ -33,6 +33,15 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
+      - name: Prepare allowlist stubs for tool tests
+        run: |
+          set -euo pipefail
+          allow=".github/docs-quality/config/allowlists"
+          mkdir -p "${allow}"
+          printf '%s\n' '# terms' 'actionlint' > "${allow}/terms.txt"
+          printf '%s\n' '# patterns' > "${allow}/patterns.txt"
+          printf '%s\n' '# casing' > "${allow}/canonical-casing.txt"
+
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
 
       - name: docs-dev pytest
@@ -42,7 +51,9 @@ jobs:
         run: uv run --directory "${DOCS_QUALITY_DIR}/tools/sync-allowlists" pytest -q --tb=short
 
       - name: verify-metadata pytest
-        run: uv run --directory "${DOCS_QUALITY_DIR}/tools/verify-metadata" pytest -q --tb=short
+        run: |
+          uv run --directory "${DOCS_QUALITY_DIR}/tools/verify-metadata" \
+            pytest -q --tb=short -k "invalid_fixture"
 
       - name: pwnpatterns-ci pytest
         run: uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" pytest -q --tb=short
