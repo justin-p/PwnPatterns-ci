@@ -21,6 +21,7 @@ class Finding:
     message: str
     rule: str | None = None
     fixable: bool = False
+    matched_text: str | None = None
 
     def sort_key(self) -> tuple[str, int, int, str]:
         return (self.path, self.line, self.column, self.tool)

@@ -527,6 +527,8 @@ def extract_allowlist_term(
     if finding.tool == "languagetool":
         if not _LT_MISSPELLING.search(finding.message):
             return None
+        if finding.matched_text:
+            return _apply_canonical_casing(finding.matched_text.strip(), rules)
         match = _LT_CONTEXT_RE.search(finding.message)
         if match:
             return _apply_canonical_casing(match.group(1).strip(), rules)

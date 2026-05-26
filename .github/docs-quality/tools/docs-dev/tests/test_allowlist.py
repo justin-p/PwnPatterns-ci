@@ -37,7 +37,13 @@ from docs_dev.manifest import load_manifest
 from tests.manifest_fixtures import copy_platform_manifest_to
 
 
-def _finding(tool: str, message: str, rule: str | None = None) -> Finding:
+def _finding(
+    tool: str,
+    message: str,
+    rule: str | None = None,
+    *,
+    matched_text: str | None = None,
+) -> Finding:
     return Finding(
         tool=tool,
         path="docs/example.md",
@@ -46,6 +52,7 @@ def _finding(tool: str, message: str, rule: str | None = None) -> Finding:
         severity="error",
         message=message,
         rule=rule,
+        matched_text=matched_text,
     )
 
 
@@ -66,9 +73,20 @@ def test_extract_languagetool_misspelling_term() -> None:
         "[languagetool] MORFOLOGIK_RULE_NL_NL: Mogelijke spelfout gevonden. "
         "— Type: misspelling — In text: «fout » — Suggestion: «fouten»",
         rule="MORFOLOGIK_RULE_NL_NL",
+        matched_text="fout",
     )
     assert extract_allowlist_term(f) == "fout"
     assert can_allowlist(f)
+
+
+def test_extract_languagetool_misspelling_uses_token_not_full_context() -> None:
+    ctx = "## Description  Er is een Prometheus exporter instantie ont"
+    f = _finding(
+        "languagetool",
+        f"[languagetool] RULE: Spelling — Type: misspelling — In text: «{ctx}»",
+        matched_text="Description",
+    )
+    assert extract_allowlist_term(f) == "Description"
 
 
 def test_extract_languagetool_grammar_not_allowlisted() -> None:

@@ -14,4 +14,5 @@ def test_parse_languagetool_sample() -> None:
     assert f.tool == "languagetool"
     assert "Type: misspelling" in f.message
     assert "In text: «fout »" in f.message
+    assert f.matched_text == "fout"
     assert f.severity == "error"

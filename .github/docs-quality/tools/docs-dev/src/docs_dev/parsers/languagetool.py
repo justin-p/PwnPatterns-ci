@@ -10,6 +10,17 @@ from docs_dev.models import Finding
 BLOCKING_ISSUE_TYPES = frozenset({"misspelling", "grammar"})
 
 
+def matched_text_from_match(match: dict) -> str:
+    """Highlighted token within LanguageTool context (not the full context snippet)."""
+    ctx = match.get("context") or {}
+    text = str(ctx.get("text") or "")
+    off = int(ctx.get("offset") or 0)
+    length = int(ctx.get("length") or 0)
+    if text and length > 0:
+        return text[off : off + length].strip()
+    return text.strip()
+
+
 def format_match_message(match: dict) -> str:
     """Align with automation/filters/lib/languagetool-message.jq (reviewdog + TUI)."""
     rule = match.get("rule") or {}
@@ -48,6 +59,7 @@ def parse_file(path: Path) -> list[Finding]:
             rule = match.get("rule") or {}
             issue_type = str(rule.get("issueType") or "").lower()
             blocking = issue_type in BLOCKING_ISSUE_TYPES
+            token = matched_text_from_match(match) if issue_type == "misspelling" else None
             findings.append(
                 Finding(
                     path=file_path,
@@ -57,6 +69,7 @@ def parse_file(path: Path) -> list[Finding]:
                     rule=str(rule.get("id") or "languagetool"),
                     message=format_match_message(match),
                     severity="error" if blocking else "warning",
+                    matched_text=token or None,
                 )
             )
     return findings

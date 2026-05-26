@@ -68,14 +68,24 @@ def token_allowlisted(token: str, terms: set[str], casing: dict[str, str]) -> bo
     return False
 
 
+def languagetool_matched_text(match: dict) -> str:
+    """Token LanguageTool flagged within context.text (offset/length), not the whole snippet."""
+    ctx = match.get("context") or {}
+    text = str(ctx.get("text") or "")
+    off = int(ctx.get("offset") or 0)
+    length = int(ctx.get("length") or 0)
+    if text and length > 0:
+        return text[off : off + length].strip()
+    return text.strip()
+
+
 def languagetool_match_allowlisted(
     match: dict,
     terms: set[str],
     casing: dict[str, str],
 ) -> bool:
-    ctx = match.get("context") or {}
-    text = str(ctx.get("text") or "").strip()
-    return bool(text and token_allowlisted(text, terms, casing))
+    token = languagetool_matched_text(match)
+    return bool(token and token_allowlisted(token, terms, casing))
 
 
 def filter_languagetool_matches(
