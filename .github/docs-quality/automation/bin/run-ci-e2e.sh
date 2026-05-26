@@ -3,12 +3,11 @@
 set -euo pipefail
 
 _AUTOMATION_BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-_REPO_ROOT="$(cd "${_AUTOMATION_BIN}/../../.." && pwd)"
-export DOC_LINT_INSTALL_DIR="${DOC_LINT_INSTALL_DIR:-${_REPO_ROOT}/.local/doc-linters}"
 
 # shellcheck source=../lib/env.sh
 source "${_AUTOMATION_BIN}/lib/env.sh"
-export REPO_ROOT="${REPO_ROOT:-${_REPO_ROOT}}"
+export REPO_ROOT="${REPO_ROOT:-$(_docs_quality_repo_root)}"
+export DOC_LINT_INSTALL_DIR="${DOC_LINT_INSTALL_DIR:-${REPO_ROOT}/.local/doc-linters}"
 # shellcheck source=../lib/ci-steps.sh
 source "${AUTOMATION_DIR}/lib/ci-steps.sh"
 

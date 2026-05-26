@@ -12,7 +12,6 @@ if str(_DOCS_DEV_SRC) not in sys.path:
     sys.path.insert(0, str(_DOCS_DEV_SRC))
 
 from docs_dev.allowlist import (  # noqa: E402
-    canonical_casing_path,
     dictionary_entries,
     merge_patterns,
     vale_token_ignores,
@@ -66,7 +65,7 @@ def sync(root: Path) -> tuple[Path, Path, Path]:
     harper_dict_path = root / ".github/docs-quality/generated/harper-dictionary.txt"
     typos_path = root / "_typos.toml"
 
-    casing_path = canonical_casing_path(cfg)
+    casing_path = cfg / "allowlists" / "canonical-casing.txt"
     casing = read_canonical_casing(casing_path)
     _, casing_pairs = parse_canonical_casing_file(casing_path)
     header, raw_terms = parse_terms_file(terms_path)

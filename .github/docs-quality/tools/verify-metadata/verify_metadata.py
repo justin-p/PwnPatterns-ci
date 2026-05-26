@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import datetime
@@ -52,8 +53,14 @@ class MetadataError(Exception):
 
 
 def repo_root() -> Path:
-    """Repository root (.github/docs-quality/tools/verify-metadata/)."""
-    return Path(__file__).resolve().parents[4]
+    """Consumer repository root (pattern docs live here, not under pwnpatterns-ci/)."""
+    if env := os.environ.get("REPO_ROOT"):
+        return Path(env).resolve()
+    here = Path(__file__).resolve()
+    root = here.parents[4]
+    if root.name == "pwnpatterns-ci":
+        return here.parents[5]
+    return root
 
 
 class MetadataValidator:

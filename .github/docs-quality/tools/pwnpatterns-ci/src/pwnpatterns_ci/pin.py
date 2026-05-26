@@ -6,7 +6,15 @@ import re
 from pathlib import Path
 
 USES_SHA = re.compile(
-    r"uses:\s+ocd-nl/pwnpatterns-ci/\.github/workflows/[^\s]+@([0-9a-f]{40})",
+    r"uses:\s+ocd-nl/pwnpatterns-ci/\.github/(?:workflows|actions)/[^\s]+@([0-9a-f]{40})",
+    re.IGNORECASE,
+)
+PLATFORM_REF_INPUT = re.compile(
+    r"platform_ref:\s*([0-9a-f]{40})",
+    re.IGNORECASE,
+)
+CHECKOUT_PLATFORM_REF = re.compile(
+    r"repository:\s+ocd-nl/pwnpatterns-ci\s*\n\s+ref:\s*([0-9a-f]{40})",
     re.IGNORECASE,
 )
 USES_LOCAL = re.compile(
@@ -28,14 +36,16 @@ def read_platform_ref(path: Path) -> str | None:
     return None
 
 
-def workflow_shas(workflows_dir: Path) -> set[str]:
-    shas: set[str] = set()
+def workflow_pins(workflows_dir: Path) -> set[str]:
+    pins: set[str] = set()
     if not workflows_dir.is_dir():
-        return shas
+        return pins
     for wf in workflows_dir.glob("*.yml"):
         text = wf.read_text(encoding="utf-8")
-        shas.update(m.lower() for m in USES_SHA.findall(text))
-    return shas
+        pins.update(m.lower() for m in USES_SHA.findall(text))
+        pins.update(m.lower() for m in PLATFORM_REF_INPUT.findall(text))
+        pins.update(m.lower() for m in CHECKOUT_PLATFORM_REF.findall(text))
+    return pins
 
 
 def verify_pin(repo_root: Path) -> list[str]:
@@ -47,23 +57,23 @@ def verify_pin(repo_root: Path) -> list[str]:
         return errors
 
     workflows_dir = repo_root / ".github" / "workflows"
-    wf_shas = workflow_shas(workflows_dir)
+    wf_pins = workflow_pins(workflows_dir)
     uses_local = any(workflows_dir.glob("*.yml")) and any(
         USES_LOCAL.search(p.read_text(encoding="utf-8"))
         for p in workflows_dir.glob("*.yml")
     )
-    if not wf_shas:
+    if not wf_pins:
         if uses_local:
             return errors
         errors.append(
-            "no ocd-nl/pwnpatterns-ci @SHA or ./.github/pwnpatterns-ci workflow uses found"
+            "no platform pin found (ocd-nl/pwnpatterns-ci @SHA, platform_ref:, or checkout ref)"
         )
         return errors
 
-    if len(wf_shas) > 1:
-        errors.append(f"workflow platform SHAs disagree: {sorted(wf_shas)}")
+    if len(wf_pins) > 1:
+        errors.append(f"workflow platform pins disagree: {sorted(wf_pins)}")
 
-    wf_sha = next(iter(wf_shas))
-    if ref != wf_sha:
-        errors.append(f"platform.ref ({ref}) != workflow uses SHA ({wf_sha})")
+    wf_pin = next(iter(wf_pins))
+    if ref != wf_pin:
+        errors.append(f"platform.ref ({ref}) != workflow pin ({wf_pin})")
     return errors

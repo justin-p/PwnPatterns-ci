@@ -17,7 +17,8 @@ if [ -f "${REPO_ROOT}/.github/docs-quality/automation/lib/env.sh" ]; then
   # shellcheck source=/dev/null
   source "${REPO_ROOT}/.github/docs-quality/automation/lib/env.sh"
 elif [ -f "${TESTS_DIR}/../docs-quality/automation/lib/env.sh" ]; then
-  export DOCS_QUALITY_DIR="$(cd "${TESTS_DIR}/../docs-quality" && pwd)"
+  DOCS_QUALITY_DIR="$(cd "${TESTS_DIR}/../docs-quality" && pwd)"
+  export DOCS_QUALITY_DIR
   # shellcheck source=/dev/null
   source "${DOCS_QUALITY_DIR}/automation/lib/env.sh"
 else

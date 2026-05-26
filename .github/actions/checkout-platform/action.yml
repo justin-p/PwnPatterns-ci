@@ -1,0 +1,25 @@
+# Check out ocd-nl/pwnpatterns-ci at a pinned SHA into .github/pwnpatterns-ci/
+name: Checkout pwnpatterns-ci platform
+description: Clone the private platform repository at platform_ref into the consumer workspace.
+
+inputs:
+  platform_ref:
+    description: Full commit SHA on ocd-nl/pwnpatterns-ci (must match workflow uses @ pins).
+    required: true
+  token:
+    description: >
+      Token with read access to ocd-nl/pwnpatterns-ci. Defaults to github.token when empty;
+      set secret PWNPATTERNS_CI_CHECKOUT_TOKEN on the consumer if the default token cannot
+      read the private platform repo.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        repository: ocd-nl/pwnpatterns-ci
+        ref: ${{ inputs.platform_ref }}
+        path: .github/pwnpatterns-ci
+        token: ${{ inputs.token != '' && inputs.token || github.token }}

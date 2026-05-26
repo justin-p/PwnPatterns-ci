@@ -7,7 +7,13 @@ _docs_quality_repo_root() {
     echo "${REPO_ROOT}"
     return
   fi
-  cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd
+  local root
+  root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  if [ "$(basename "${root}")" = "pwnpatterns-ci" ]; then
+    cd "${root}/../.." && pwd
+    return
+  fi
+  echo "${root}"
 }
 
 # Defined before the load guard so re-source (e.g. sync-allowlists after ci-steps) still works.

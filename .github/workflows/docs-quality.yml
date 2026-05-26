@@ -8,6 +8,10 @@ on:
         description: ocd-nl/pwnpatterns-ci commit SHA (must match workflow uses pin)
         required: true
         type: string
+    secrets:
+      PWNPATTERNS_CI_CHECKOUT_TOKEN:
+        description: Optional PAT for checkout when GITHUB_TOKEN cannot read the private platform repo
+        required: false
 
 permissions:
   contents: read
@@ -29,11 +33,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Checkout platform
+        uses: ./.github/actions/checkout-platform
         with:
-          repository: ocd-nl/pwnpatterns-ci
-          ref: ${{ inputs.platform_ref }}
-          path: .github/pwnpatterns-ci
+          platform_ref: ${{ inputs.platform_ref }}
+          token: ${{ secrets.PWNPATTERNS_CI_CHECKOUT_TOKEN }}
 
       - name: Load manifest
         run: |
@@ -204,4 +208,3 @@ jobs:
             cat lint-logs/prek.log 2>/dev/null || true
             exit 1
           fi
-
