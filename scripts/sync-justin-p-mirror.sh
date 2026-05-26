@@ -88,13 +88,14 @@ if git diff --quiet HEAD -- "${MIRROR_PATHS[@]}"; then
   echo "Mirror tree matches ${UPSTREAM}/${SYNC_BRANCH} (slug already applied)."
 else
   git add "${MIRROR_PATHS[@]}"
-  git commit -m "$(cat <<EOF
+  git commit -m "$(
+    cat <<EOF
 chore(mirror): sync from ${ORG_SLUG} with public CI checkout slug
 
 Automated mirror commit on top of ${UPSTREAM}/${SYNC_BRANCH}.
 Consumers pin this SHA on ${MIRROR_SLUG}.
 EOF
-)"
+  )"
   MIRROR_COMMIT="$(git rev-parse HEAD)"
   echo "Created mirror commit ${MIRROR_COMMIT}"
 fi
