@@ -10,7 +10,7 @@ export CI_STEPS_LYCHEE_LOADED=1
 # shellcheck source=env.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/env.sh"
 
-LYCHEE_VERSION="${LYCHEE_VERSION:-0.18.1}"
+LYCHEE_VERSION="${LYCHEE_VERSION:-0.24.2}"
 LYCHEE_INSTALL_DIR="${LYCHEE_INSTALL_DIR:-${DOC_LINT_INSTALL_DIR:-/tmp}}"
 
 _lychee_runnable() {
@@ -18,14 +18,26 @@ _lychee_runnable() {
   [ -n "${bin}" ] && [ -x "${bin}" ] && "${bin}" --version >/dev/null 2>&1
 }
 
+_lychee_version_matches_pin() {
+  local bin="$1"
+  local got
+  got="$("${bin}" --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)" || return 1
+  [ "${got}" = "${LYCHEE_VERSION}" ]
+}
+
 lychee_install_cli() {
   mkdir -p "${LYCHEE_INSTALL_DIR}"
   export PATH="${LYCHEE_INSTALL_DIR}:${PATH}"
-  if _lychee_runnable "${LYCHEE_INSTALL_DIR}/lychee"; then
+  if _lychee_runnable "${LYCHEE_INSTALL_DIR}/lychee" &&
+    _lychee_version_matches_pin "${LYCHEE_INSTALL_DIR}/lychee"; then
     return 0
   fi
-  if command -v lychee >/dev/null 2>&1 && _lychee_runnable "$(command -v lychee)"; then
-    return 0
+  if command -v lychee >/dev/null 2>&1; then
+    local system_lychee
+    system_lychee="$(command -v lychee)"
+    if _lychee_runnable "${system_lychee}" && _lychee_version_matches_pin "${system_lychee}"; then
+      return 0
+    fi
   fi
   : "${LYCHEE_VERSION:?LYCHEE_VERSION is required}"
   : "${LYCHEE_LINUX_AMD64_SHA256:?LYCHEE_LINUX_AMD64_SHA256 is required}"
