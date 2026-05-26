@@ -2,11 +2,29 @@
 
 Push this tree to the private **`ocd-nl/pwnpatterns-ci`** repository.
 
-## Export from PwnPatterns (local dev fallback)
+## Scripts (platform)
+
+| Script | Purpose |
+|--------|---------|
+| [`scripts/ensure-platform.sh`](scripts/ensure-platform.sh) | Clone/checkout this repo into a consumer’s `.github/pwnpatterns-ci/` (set `REPO_ROOT` to the pattern repo) |
+| [`scripts/run-with-platform.sh`](scripts/run-with-platform.sh) | Run automation under `.github/docs-quality/automation/bin/` |
+| [`scripts/docs-dev.sh`](scripts/docs-dev.sh) | docs-dev TUI / CLI |
+| [`scripts/export-pwnpatterns-ci.sh`](scripts/export-pwnpatterns-ci.sh) | Copy a local platform tree when git clone fails (`PWNPATTERNS_CI_USE_EXPORT=1`) |
+| [`scripts/consumer-ensure-platform.sh`](scripts/consumer-ensure-platform.sh) | **Vendored** into pattern repos as `scripts/ensure-platform.sh` |
+
+Pattern repos keep only `scripts/ensure-platform.sh` (copy of `consumer-ensure-platform.sh`), then run:
 
 ```bash
-./scripts/export-pwnpatterns-ci.sh
-# Creates .github/pwnpatterns-ci/ when the remote is unavailable.
+./scripts/ensure-platform.sh
+./.github/pwnpatterns-ci/scripts/docs-dev.sh
+```
+
+## Local export fallback
+
+```bash
+PWNPATTERNS_CI_DEST=/path/to/consumer/.github/pwnpatterns-ci \
+  PWNPATTERNS_CI_SOURCE="$(pwd)" \
+  ./scripts/export-pwnpatterns-ci.sh
 ```
 
 ## Layout
