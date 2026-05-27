@@ -150,19 +150,12 @@ def run_e2e(
                 print("CI_E2E smoke-docs: no docs/*.md under repo root; skipping lint job.")
                 return
         else:
-            scan_mode, paths, skip = doc_targets(layout)
-            if (
-                os.environ.get("GITHUB_EVENT_NAME") == "pull_request"
-                and scan_mode == "all"
-                and paths
-            ):
-                # config-only PR (e.g. .vale.ini): doc_targets rescans the full corpus;
-                # docs-quality already covers that — E2E only exercises machinery.
-                print(
-                    "CI_E2E: config-only pull_request doc_targets; "
-                    "skipping full-corpus lint job."
-                )
+            if os.environ.get("GITHUB_EVENT_NAME") == "workflow_call":
+                # Consumer/platform invoke ci-e2e via reusable workflow; doc_targets
+                # would scan the full corpus. Prose lint runs in docs-quality instead.
+                print("CI_E2E: workflow_call; skipping prose lint job.")
                 return
+            scan_mode, paths, skip = doc_targets(layout)
             if skip and os.environ.get("CI_E2E_FULL_LINT") == "true":
                 paths = [layout.rel(p) for p in sorted((layout.repo_root / "docs").glob("**/*.md"))]
                 skip = False
