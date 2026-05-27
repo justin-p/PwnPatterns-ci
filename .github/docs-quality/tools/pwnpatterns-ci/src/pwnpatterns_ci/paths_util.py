@@ -10,6 +10,12 @@ _PLATFORM_PATH_PREFIXES = (
     ".github/pwnpatterns-ci/",
     ".github/docs-quality/tools/pwnpatterns-ci/",
 )
+_PLATFORM_DOCS_MARKERS = (
+    "/.github/pwnpatterns-ci/docs/",
+    ".github/pwnpatterns-ci/docs/",
+    "/.github/docs-quality/tools/pwnpatterns-ci/docs/",
+    ".github/docs-quality/tools/pwnpatterns-ci/docs/",
+)
 
 
 def strip_repo_root(path: str, repo_root: str) -> str:
@@ -23,6 +29,9 @@ def strip_repo_root(path: str, repo_root: str) -> str:
 
 
 def _strip_platform_prefix(path: str) -> str:
+    for marker in _PLATFORM_DOCS_MARKERS:
+        if marker in path:
+            return f"docs/{path.split(marker, 1)[1]}"
     for prefix in _PLATFORM_PATH_PREFIXES:
         if path.startswith(prefix):
             return path[len(prefix) :]

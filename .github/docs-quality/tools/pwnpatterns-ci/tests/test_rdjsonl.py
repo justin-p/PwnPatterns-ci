@@ -61,3 +61,19 @@ def test_resolve_path_strips_platform_checkout_prefix() -> None:
     )
     got = resolve_path(raw, path_index, repo_root="")
     assert got == path_index["Protocollen_zonder_transportlaag_beveiliging.md"]
+
+
+def test_resolve_path_strips_embedded_platform_checkout_prefix() -> None:
+    path_index = {
+        "Protocollen_zonder_transportlaag_beveiliging.md": (
+            "docs/infra/general/Protocollen_zonder_transportlaag_beveiliging/"
+            "Protocollen_zonder_transportlaag_beveiliging.md"
+        )
+    }
+    raw = (
+        "/home/runner/work/PwnPatterns-nl/PwnPatterns-nl/.github/pwnpatterns-ci/docs/infra/general/"
+        "Protocollen_zonder_transportlaag_beveiliging/"
+        "Protocollen_zonder_transportlaag_beveiliging.md"
+    )
+    got = resolve_path(raw, path_index, repo_root="")
+    assert got == path_index["Protocollen_zonder_transportlaag_beveiliging.md"]
