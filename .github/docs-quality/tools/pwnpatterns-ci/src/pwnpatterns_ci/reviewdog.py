@@ -26,6 +26,10 @@ _PLATFORM_DOC_PATH_MARKERS = (
 )
 
 
+def _repo_cwd() -> str:
+    return os.environ.get("REPO_ROOT") or os.environ.get("GITHUB_WORKSPACE") or "."
+
+
 def reporter() -> str:
     if os.environ.get("CI_REVIEWDOG_MODE") == "local" or not os.environ.get("GITHUB_ACTIONS"):
         return "local"
@@ -91,7 +95,14 @@ def _run_reviewdog(
         f"-filter-mode={filter_mode(rep)}",
         *(extra_args or []),
     ]
-    return subprocess.run(cmd, input=stdin, text=True, capture_output=True, check=False)
+    return subprocess.run(
+        cmd,
+        input=stdin,
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=_repo_cwd(),
+    )
 
 
 def _normalize_path(path: str) -> str:
