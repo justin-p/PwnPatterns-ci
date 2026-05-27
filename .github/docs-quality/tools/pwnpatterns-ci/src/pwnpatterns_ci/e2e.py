@@ -182,7 +182,8 @@ def run_e2e(
                 print("No documentation targets; skipping lint job.")
                 return
         if not paths:
-            raise RuntimeError("No paths to lint")
+            print("No paths to lint; skipping lint job.")
+            return
         if os.environ.get("CI_E2E_SKIP_SYNC", "true") != "true":
             _sync_allowlists(layout)
         _prepare_harper()
