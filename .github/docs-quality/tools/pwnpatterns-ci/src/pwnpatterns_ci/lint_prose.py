@@ -66,7 +66,8 @@ def route_grammar(layout: Layout, log_dir: Path) -> None:
     script = layout.docs_quality_dir / "tools" / "grammar-routing" / "route_grammar_paths.py"
     if script.is_file():
         subprocess.run(
-            [sys.executable, str(script), str(log_dir)],
+            # route_grammar_paths.py requires --log-dir (positional arg would fail).
+            [sys.executable, str(script), "--log-dir", str(log_dir)],
             cwd=layout.repo_root,
             check=True,
             env=os.environ.copy(),
