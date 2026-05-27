@@ -7,7 +7,10 @@ import os
 import subprocess
 from pathlib import Path
 
+from pwnpatterns_ci.rdjsonl.convert import prose_to_rdjsonl
+
 HARPER_BLOCKING = int(os.environ.get("HARPER_BLOCKING_PRIORITY", "127"))
+_CONTENT_LINTERS = ("vale", "typos", "textlint", "rumdl", "harper", "languagetool", "metadata")
 
 
 def _jq(expr: str, path: Path) -> subprocess.CompletedProcess[str]:
@@ -107,9 +110,64 @@ def record_lint_exits(log_dir: Path) -> None:
     )
 
 
+def _format_diagnostic_line(diagnostic: dict) -> str:
+    location = diagnostic.get("location") or {}
+    path = location.get("path") or "?"
+    start = (location.get("range") or {}).get("start") or {}
+    line = start.get("line") or 1
+    column = start.get("column") or 1
+    message = diagnostic.get("message") or "issue"
+    return f"{path}:{line}:{column}: {message}"
+
+
+def _tool_failure_lines(log_dir: Path, tool: str, max_lines: int) -> list[str]:
+    lines: list[str] = []
+
+    if tool == "metadata":
+        rdjsonl = log_dir / "metadata.rdjsonl"
+        if rdjsonl.is_file() and rdjsonl.stat().st_size:
+            for raw in rdjsonl.read_text(encoding="utf-8").splitlines():
+                if raw.strip():
+                    lines.append(_format_diagnostic_line(json.loads(raw)))
+    else:
+        json_path = log_dir / f"{tool}.json"
+        if json_path.is_file() and json_path.stat().st_size:
+            try:
+                chunk = prose_to_rdjsonl(tool, log_dir)
+            except (ValueError, json.JSONDecodeError, OSError):
+                chunk = ""
+            for raw in chunk.splitlines():
+                if raw.strip():
+                    lines.append(_format_diagnostic_line(json.loads(raw)))
+
+    if not lines:
+        stderr = log_dir / f"{tool}.stderr"
+        if stderr.is_file() and stderr.stat().st_size:
+            lines.extend(stderr.read_text(encoding="utf-8").splitlines())
+
+    if not lines:
+        log_file = log_dir / f"{tool}.log"
+        if log_file.is_file() and log_file.stat().st_size:
+            lines.extend(log_file.read_text(encoding="utf-8").splitlines())
+
+    if not lines:
+        exit_f = log_dir / f"{tool}.exit"
+        code = exit_f.read_text(encoding="utf-8").strip() if exit_f.is_file() else "?"
+        lines.append(
+            f"{tool} exited {code} with no parseable diagnostics "
+            f"(checked {log_dir / f'{tool}.json'}, stderr, and log)"
+        )
+
+    if len(lines) > max_lines:
+        omitted = len(lines) - max_lines
+        lines = lines[:max_lines]
+        lines.append(f"... {omitted} more {tool} issue(s); see {log_dir}/")
+    return lines
+
+
 def report_failures(log_dir: Path, max_lines: int = 60) -> int:
     fail = 0
-    for tool in ("vale", "typos", "textlint", "rumdl", "harper", "languagetool", "metadata"):
+    for tool in _CONTENT_LINTERS:
         exit_f = log_dir / f"{tool}.exit"
         if not exit_f.is_file():
             continue
@@ -117,10 +175,7 @@ def report_failures(log_dir: Path, max_lines: int = 60) -> int:
             continue
         print(f"::error title={tool}::{tool} reported issues (details below)")
         print(f"::group::{tool} lint log summary")
-        stderr = log_dir / f"{tool}.stderr"
-        if stderr.is_file() and stderr.stat().st_size:
-            lines = stderr.read_text(encoding="utf-8").splitlines()[-max_lines:]
-            print("\n".join(lines))
+        print("\n".join(_tool_failure_lines(log_dir, tool, max_lines)))
         fail = 1
         print("::endgroup::")
     if fail:
