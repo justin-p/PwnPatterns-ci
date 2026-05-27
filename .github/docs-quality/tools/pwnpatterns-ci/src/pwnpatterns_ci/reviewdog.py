@@ -16,7 +16,8 @@ _METADATA_RE = re.compile(
     re.MULTILINE,
 )
 _SHELLCHECK_RE = re.compile(r"^\.github/.*\.sh:\d+:\d+:")
-_DEFAULT_MAX_RESULTS = 20
+_DEFAULT_MAX_RESULTS_PR_REVIEW = 20
+_DEFAULT_MAX_RESULTS_CHECK = 10
 
 
 def reporter() -> str:
@@ -36,12 +37,14 @@ def filter_mode(rep: str | None = None) -> str:
     return "nofilter"
 
 
-def _max_results() -> int:
-    raw = os.environ.get("REVIEWDOG_MAX_RESULTS", str(_DEFAULT_MAX_RESULTS))
+def _max_results(rep: str) -> int:
+    key = "REVIEWDOG_MAX_RESULTS_PR_REVIEW" if rep == "github-pr-review" else "REVIEWDOG_MAX_RESULTS_CHECK"
+    default = _DEFAULT_MAX_RESULTS_PR_REVIEW if rep == "github-pr-review" else _DEFAULT_MAX_RESULTS_CHECK
+    raw = os.environ.get(key, os.environ.get("REVIEWDOG_MAX_RESULTS", str(default)))
     try:
         return max(1, int(raw))
     except ValueError:
-        return _DEFAULT_MAX_RESULTS
+        return default
 
 
 def _truncate_rdjsonl(stdin: str, *, max_results: int) -> tuple[str, int]:
@@ -96,13 +99,12 @@ def rdjsonl(
         return
     rep = rep or reporter()
     payload = stdin
-    if rep == "github-pr-review":
-        payload, omitted = _truncate_rdjsonl(stdin, max_results=_max_results())
-        if omitted:
-            print(
-                f"reviewdog: truncating PR review payload by {omitted} finding(s)",
-                file=sys.stderr,
-            )
+    payload, omitted = _truncate_rdjsonl(stdin, max_results=_max_results(rep))
+    if omitted:
+        print(
+            f"reviewdog: truncating {rep} payload by {omitted} finding(s)",
+            file=sys.stderr,
+        )
 
     proc = _run_reviewdog(name, payload, rep=rep, extra_args=extra_args)
     if proc.stdout:
@@ -115,7 +117,13 @@ def rdjsonl(
             "reviewdog: github-pr-review reporter failed; falling back to github-check",
             file=sys.stderr,
         )
-        fb = _run_reviewdog(name, payload, rep="github-check", extra_args=extra_args)
+        check_payload, check_omitted = _truncate_rdjsonl(payload, max_results=_max_results("github-check"))
+        if check_omitted:
+            print(
+                f"reviewdog: truncating github-check payload by {check_omitted} finding(s)",
+                file=sys.stderr,
+            )
+        fb = _run_reviewdog(name, check_payload, rep="github-check", extra_args=extra_args)
         if fb.stdout:
             print(fb.stdout, end="")
         if fb.stderr:
