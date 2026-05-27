@@ -7,6 +7,11 @@ on:
         description: justin-p/PwnPatterns-ci commit SHA
         required: true
         type: string
+      smoke_docs:
+        description: Lint first docs/*.md subset and expect consumer smoke probe exits
+        required: false
+        type: boolean
+        default: false
     secrets:
       PWNPATTERNS_CI_CHECKOUT_TOKEN:
         description: Optional PAT for checkout when GITHUB_TOKEN cannot read the private platform repo
@@ -58,5 +63,9 @@ jobs:
           DOC_LINT_INSTALL_DIR: /tmp/doc-linters
         run: |
           grep -vE '^\s*(#|$)' "${DOCS_QUALITY_DIR}/config/manifest.env" >> "${GITHUB_ENV}"
+          args=(run-e2e --job all)
+          if [ "${{ inputs.smoke_docs }}" = "true" ]; then
+            args+=(--smoke-docs)
+          fi
           uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
-            pwnpatterns-ci run-e2e --job all --smoke-docs
+            pwnpatterns-ci "${args[@]}"
