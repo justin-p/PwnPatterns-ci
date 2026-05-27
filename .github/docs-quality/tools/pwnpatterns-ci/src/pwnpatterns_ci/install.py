@@ -159,8 +159,15 @@ def _install_languagetool(install: Path) -> None:
         download_verify(url, lt_sha, zpath)
         with zipfile.ZipFile(zpath) as zf:
             zf.extractall(Path(tmp))
-        extracted = next(Path(tmp).glob("LanguageTool-*"), None)
-        if not extracted or not (extracted / "languagetool-commandline.jar").is_file():
+        extracted = next(
+            (
+                p
+                for p in Path(tmp).glob("LanguageTool-*")
+                if p.is_dir() and (p / "languagetool-commandline.jar").is_file()
+            ),
+            None,
+        )
+        if not extracted:
             raise RuntimeError("Invalid LanguageTool archive")
         if lt_home.exists():
             shutil.rmtree(lt_home)
