@@ -60,6 +60,26 @@ def _lychee_lib(layout: Layout) -> Path:
 
 
 def _run_lychee(layout: Layout, log_dir: Path, paths: list[str]) -> int:
+    temp_cfg = layout.repo_root / ".lychee.toml"
+    created_temp_cfg = False
+    if not temp_cfg.is_file():
+        temp_cfg.write_text(
+            "\n".join(
+                (
+                    "# Temporary CI E2E fallback config for platform-only checkouts.",
+                    "# Consumer repos should provide their own .lychee.toml.",
+                    "max_redirects = 8",
+                    "max_retries = 2",
+                    "retry_wait_time = 2",
+                    "timeout = 20",
+                    "insecure = false",
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
+        created_temp_cfg = True
+        print("lychee config .lychee.toml not found; created temporary fallback config.")
     lib = _lychee_lib(layout)
     env = os.environ.copy()
     env["CI_LINT_LOG_DIR"] = str(log_dir)
@@ -74,7 +94,11 @@ export DOCS_QUALITY_DIR="{layout.docs_quality_dir}"
 source "{lib}/ci-steps-lychee.sh"
 ci_lychee_pr {quoted}
 """
-    proc = subprocess.run(["bash", "-c", script], cwd=layout.repo_root, env=env)
+    try:
+        proc = subprocess.run(["bash", "-c", script], cwd=layout.repo_root, env=env)
+    finally:
+        if created_temp_cfg:
+            temp_cfg.unlink(missing_ok=True)
     exit_f = log_dir / "lychee-filter.exit"
     if exit_f.is_file():
         return int(exit_f.read_text(encoding="utf-8").strip() or "0")
