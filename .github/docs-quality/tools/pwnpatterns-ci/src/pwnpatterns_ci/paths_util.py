@@ -6,6 +6,11 @@ import json
 import os
 from pathlib import Path
 
+_PLATFORM_PATH_PREFIXES = (
+    ".github/pwnpatterns-ci/",
+    ".github/docs-quality/tools/pwnpatterns-ci/",
+)
+
 
 def strip_repo_root(path: str, repo_root: str) -> str:
     if not path or not repo_root:
@@ -14,6 +19,13 @@ def strip_repo_root(path: str, repo_root: str) -> str:
     if path.startswith(root):
         rel = path[len(root) :]
         return rel[1:] if rel.startswith("/") else rel
+    return path
+
+
+def _strip_platform_prefix(path: str) -> str:
+    for prefix in _PLATFORM_PATH_PREFIXES:
+        if path.startswith(prefix):
+            return path[len(prefix) :]
     return path
 
 
@@ -26,8 +38,11 @@ def resolve_path(
     if not raw or not isinstance(raw, str):
         return raw
     rel = strip_repo_root(raw, repo_root)
+    rel = _strip_platform_prefix(rel)
     if "/" in rel:
-        return rel
+        if rel.startswith("docs/"):
+            return rel
+        return path_index.get(Path(rel).name, rel)
     return path_index.get(rel, rel)
 
 

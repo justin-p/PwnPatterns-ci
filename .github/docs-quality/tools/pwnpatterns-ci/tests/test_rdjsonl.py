@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from pwnpatterns_ci.paths_util import resolve_path
 from pwnpatterns_ci.rdjsonl.convert import prose_to_rdjsonl
 
 FIXTURES = (
@@ -44,3 +45,19 @@ def test_harper_resolves_path_index(log_dir: Path) -> None:
     lines = [json.loads(ln) for ln in out.splitlines() if ln.strip()]
     assert all(ln["location"]["path"].startswith("docs/") for ln in lines)
     assert any("InflectedVerbAfterTo" in ln["message"] for ln in lines)
+
+
+def test_resolve_path_strips_platform_checkout_prefix() -> None:
+    path_index = {
+        "Protocollen_zonder_transportlaag_beveiliging.md": (
+            "docs/infra/general/Protocollen_zonder_transportlaag_beveiliging/"
+            "Protocollen_zonder_transportlaag_beveiliging.md"
+        )
+    }
+    raw = (
+        ".github/docs-quality/tools/pwnpatterns-ci/docs/infra/general/"
+        "Protocollen_zonder_transportlaag_beveiliging/"
+        "Protocollen_zonder_transportlaag_beveiliging.md"
+    )
+    got = resolve_path(raw, path_index, repo_root="")
+    assert got == path_index["Protocollen_zonder_transportlaag_beveiliging.md"]
