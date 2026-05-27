@@ -48,9 +48,15 @@ jobs:
           set -euo pipefail
           allow="${REPO_ROOT}/.github/docs-quality/config/allowlists"
           mkdir -p "${allow}"
-          printf '%s\n' '# terms' 'actionlint' > "${allow}/terms.txt"
-          printf '%s\n' '# patterns' > "${allow}/patterns.txt"
-          printf '%s\n' '# casing' > "${allow}/canonical-casing.txt"
+          if [ ! -f "${allow}/terms.txt" ]; then
+            printf '%s\n' '# terms' 'actionlint' > "${allow}/terms.txt"
+          fi
+          if [ ! -f "${allow}/patterns.txt" ]; then
+            printf '%s\n' '# patterns' > "${allow}/patterns.txt"
+          fi
+          if [ ! -f "${allow}/canonical-casing.txt" ]; then
+            printf '%s\n' '# casing' > "${allow}/canonical-casing.txt"
+          fi
 
       - name: Component tests
         run: bash .github/pwnpatterns-ci/.github/tests/run-component-tests.sh
