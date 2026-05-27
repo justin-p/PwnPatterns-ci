@@ -150,10 +150,10 @@ def run_e2e(
                 print("CI_E2E smoke-docs: no docs/*.md under repo root; skipping lint job.")
                 return
         else:
-            if os.environ.get("GITHUB_EVENT_NAME") == "workflow_call":
-                # Consumer/platform invoke ci-e2e via reusable workflow; doc_targets
-                # would scan the full corpus. Prose lint runs in docs-quality instead.
-                print("CI_E2E: workflow_call; skipping prose lint job.")
+            if os.environ.get("CI_E2E_REUSABLE") == "true":
+                # Reusable ci-e2e.yml: doc_targets would scan the full corpus on
+                # workflow_call; prose lint runs in docs-quality on PR/push instead.
+                print("CI_E2E: reusable workflow; skipping prose lint job.")
                 return
             scan_mode, paths, skip = doc_targets(layout)
             if skip and os.environ.get("CI_E2E_FULL_LINT") == "true":
