@@ -8,6 +8,11 @@ on:
         description: justin-p/PwnPatterns-ci commit SHA (must match workflow uses pin)
         required: true
         type: string
+      reviewdog_reporter:
+        description: reviewdog reporter to use (e.g. github-pr-review, github-check, local)
+        required: false
+        type: string
+        default: github-check
     secrets:
       PWNPATTERNS_CI_CHECKOUT_TOKEN:
         description: Optional PAT for checkout when GITHUB_TOKEN cannot read the private platform repo
@@ -166,7 +171,7 @@ jobs:
           CI_LINT_LOG_DIR: ${{ github.workspace }}/lint-logs
           LINT_LOG_DIR: ${{ github.workspace }}/lint-logs
         run: |
-          reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}"
+          reporter="${{ inputs.reviewdog_reporter }}"
           uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci report-reviewdog \
             "${GITHUB_WORKSPACE}/lint-logs" --reporter "${reporter}"
 
