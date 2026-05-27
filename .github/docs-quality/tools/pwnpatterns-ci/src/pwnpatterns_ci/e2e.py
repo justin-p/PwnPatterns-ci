@@ -110,6 +110,22 @@ def run_e2e(
     load_manifest(layout)
     results: dict[str, int] = {}
     expected = _load_expectations(layout)
+    if smoke_docs:
+        # Smoke mode intentionally includes probe fixtures that should fail:
+        # - Vale/rumdl/metadata on `docs/_ci_trigger_smoke/**`
+        # - Lychee broken link display on `docs/_ci_trigger_smoke/**`
+        # - actionlint/shellcheck probe workflows/scripts under `.github/`
+        # CI E2E is about the machinery reporting + exit handling, not about content debt being empty.
+        expected.update(
+            {
+                "vale": 1,
+                "rumdl": 1,
+                "metadata": 1,
+                "lychee": 1,
+                "shellcheck": 1,
+                "actionlint": 1,
+            }
+        )
 
     print("==> component tests")
     _run_component_tests(layout)
