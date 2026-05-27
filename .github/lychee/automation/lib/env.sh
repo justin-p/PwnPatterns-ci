@@ -34,9 +34,11 @@ _resolve_lychee_config_file() {
 
 _resolve_lychee_jq_lib() {
   for dir in \
+    "${AUTOMATION_DIR}/filters/lib" \
+    "${REPO_ROOT}/.github/pwnpatterns-ci/.github/lychee/automation/filters/lib" \
+    "${REPO_ROOT}/.github/lychee/automation/filters/lib" \
     "${REPO_ROOT}/.github/pwnpatterns-ci/.github/docs-quality/automation/filters/lib" \
-    "${REPO_ROOT}/.github/docs-quality/automation/filters/lib" \
-    "${LYCHEE_DIR}/../docs-quality/automation/filters/lib"; do
+    "${REPO_ROOT}/.github/docs-quality/automation/filters/lib"; do
     if [ -f "${dir}/lychee-message.jq" ]; then
       echo "${dir}"
       return 0

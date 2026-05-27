@@ -25,6 +25,8 @@ jobs:
     env:
       DOCS_QUALITY_DIR: ${{ github.workspace }}/.github/pwnpatterns-ci/.github/docs-quality
       CONSUMER_CONFIG_DIR: ${{ github.workspace }}/.github/docs-quality/config
+      DOC_LINT_INSTALL_DIR: /tmp/doc-linters
+      PWNPATTERNS_CI_UV: ${{ github.workspace }}/.github/pwnpatterns-ci/.github/docs-quality/tools/pwnpatterns-ci
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -37,62 +39,11 @@ jobs:
           token: ${{ secrets.PWNPATTERNS_CI_CHECKOUT_TOKEN != '' && secrets.PWNPATTERNS_CI_CHECKOUT_TOKEN || github.token }}
 
       - name: Load docs-quality manifest
-        run: |
-          grep -vE '^\s*(#|$)' "${DOCS_QUALITY_DIR}/config/manifest.env" >> "${GITHUB_ENV}"
+        run: grep -vE '^\s*(#|$)' "${DOCS_QUALITY_DIR}/config/manifest.env" >> "${GITHUB_ENV}"
 
-      - name: Install shell linters
-        run: bash "${DOCS_QUALITY_DIR}/automation/install/shell-linters.sh"
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
 
-      - uses: reviewdog/action-setup@d8a7baabd7f3e8544ee4dbde3ee41d0011c3a93f # v1.5.0
-
-      - name: Report shellcheck (reviewdog)
+      - name: Run actionlint job
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          mkdir -p lint-logs
-          mapfile -t scripts < <(
-            find .github -type f -name '*.sh' ! -path '*/pwnpatterns-ci/*' 2>/dev/null | sort
-          )
-          if [ "${#scripts[@]}" -eq 0 ]; then
-            exit 0
-          fi
-          shellcheck_rc="${CONSUMER_CONFIG_DIR}/shellcheckrc"
-          shellcheck_args=(-f gcc -x)
-          if [ -f "${shellcheck_rc}" ]; then
-            shellcheck_args+=(--rcfile="${shellcheck_rc}")
-          fi
-          set +e
-          shellcheck "${shellcheck_args[@]}" "${scripts[@]}" >lint-logs/shellcheck.txt 2>lint-logs/shellcheck.stderr
-          echo "$?" >lint-logs/shellcheck.exit
-          set -e
-          if [ -s lint-logs/shellcheck.txt ]; then
-            # shellcheck source=/dev/null
-            source "${DOCS_QUALITY_DIR}/automation/lib/reviewdog-shellcheck.sh"
-            reviewdog_shellcheck_gcc lint-logs/shellcheck.txt shellcheck \
-              -reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}" \
-              -fail-level=error -filter-mode=file
-          fi
-
-      - name: Check shfmt
-        run: |
-          mapfile -t scripts < <(
-            find .github -type f -name '*.sh' ! -path '*/pwnpatterns-ci/*' 2>/dev/null | sort
-          )
-          if [ "${#scripts[@]}" -eq 0 ]; then
-            exit 0
-          fi
-          shfmt -d -ln bash -i 2 -ci "${scripts[@]}"
-
-      - name: Fail on shellcheck
-        run: |
-          if [ -f lint-logs/shellcheck.exit ] && [ "$(cat lint-logs/shellcheck.exit)" -ne 0 ]; then
-            cat lint-logs/shellcheck.stderr 2>/dev/null || true
-            exit 1
-          fi
-
-      - uses: reviewdog/action-actionlint@6fb7acc99f4a1008869fa8a0f09cfca740837d9d # v1.72.0
-        with:
-          fail_level: error
-          filter_mode: file
-          reporter: ${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}
+        run: uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci actionlint-job lint-logs

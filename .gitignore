@@ -5,3 +5,4 @@ __pycache__/
 *.pyc
 lint-logs/
 .github/docs-quality/config/textlint/node_modules/
+.gitnexus

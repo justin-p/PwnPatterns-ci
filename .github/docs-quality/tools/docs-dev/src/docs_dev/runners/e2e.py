@@ -4,7 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from docs_dev.context import RepoContext
-from docs_dev.subprocess_util import run_bash_script, stream_bash_script
+from docs_dev.subprocess_util import run_bash_script, stream_bash_script, uv_run_tool_streamed
 
 
 def _component_tests_script(ctx: RepoContext) -> Path:
@@ -25,10 +25,13 @@ def run_e2e(
     *,
     on_line: Callable[[str], None] | None = None,
 ) -> int:
-    script = ctx.automation_bin / "run-ci-e2e.sh"
+    pci = ctx.docs_quality_dir / "tools" / "pwnpatterns-ci"
+    args = ["pwnpatterns-ci", "run-e2e", *extra_args]
     if on_line:
-        return stream_bash_script(ctx, script, *extra_args, on_line=on_line)
-    return run_bash_script(ctx, script, *extra_args).returncode
+        return uv_run_tool_streamed(ctx, pci, *args, on_line=on_line).returncode
+    from docs_dev.subprocess_util import uv_run_tool
+
+    return uv_run_tool(ctx, pci, *args).returncode
 
 
 def run_test(ctx: RepoContext) -> int:

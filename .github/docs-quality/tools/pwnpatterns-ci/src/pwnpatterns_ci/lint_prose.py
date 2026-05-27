@@ -63,10 +63,11 @@ def build_path_index(log_dir: Path, paths: list[str]) -> None:
 
 
 def route_grammar(layout: Layout, log_dir: Path) -> None:
-    bin_sh = layout.automation_dir / "bin" / "route-grammar-paths.sh"
-    if bin_sh.is_file():
+    script = layout.docs_quality_dir / "tools" / "grammar-routing" / "route_grammar_paths.py"
+    if script.is_file():
         subprocess.run(
-            ["bash", str(bin_sh), str(log_dir)],
+            # route_grammar_paths.py requires --log-dir (positional arg would fail).
+            [sys.executable, str(script), "--log-dir", str(log_dir)],
             cwd=layout.repo_root,
             check=True,
             env=os.environ.copy(),
@@ -124,7 +125,12 @@ def lint_prose(layout: Layout, paths: list[str], log_dir: Path) -> None:
     tasks: list[tuple[str, callable]] = []
 
     def vale() -> None:
-        _run(["vale", "--output=JSON", *paths], log_dir / "vale.json", log_dir / "vale.stderr", "{}")
+        _run(
+            ["vale", "--output=JSON", *paths],
+            log_dir / "vale.json",
+            log_dir / "vale.stderr",
+            empty_json="{}",
+        )
 
     def typos() -> None:
         if typos_paths:
@@ -157,6 +163,11 @@ def lint_prose(layout: Layout, paths: list[str], log_dir: Path) -> None:
                 encoding="utf-8",
             )
             return
+        consumer_allow = layout.consumer_config_dir / "allowlists" / "textlint-allow.yml"
+        platform_allow = layout.config_dir / "allowlists" / "textlint-allow.yml"
+        if consumer_allow.is_file():
+            platform_allow.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(consumer_allow, platform_allow)
         repo = Path(os.environ.get("REPO_ROOT", layout.repo_root))
         abs_paths = [
             p if Path(p).is_absolute() else str((repo / p).resolve())
@@ -177,6 +188,12 @@ def lint_prose(layout: Layout, paths: list[str], log_dir: Path) -> None:
             cwd=textlint_cfg,
             empty_json="[]",
         )
+        textlint_log = log_dir / "textlint.json"
+        if textlint_log.is_file() and textlint_log.stat().st_size:
+            try:
+                json.loads(textlint_log.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                textlint_log.write_text("[]", encoding="utf-8")
 
     def rumdl() -> None:
         _run(

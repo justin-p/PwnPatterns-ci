@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from docs_dev.context import RepoContext
-from docs_dev.subprocess_util import run, run_bash_script
+from docs_dev.subprocess_util import run, uv_run_tool
 
 
 def run_setup(
@@ -16,18 +16,18 @@ def run_setup(
         if on_line:
             on_line(msg)
 
+    pci = ctx.docs_quality_dir / "tools" / "pwnpatterns-ci"
     ctx.doc_lint_install_dir.mkdir(parents=True, exist_ok=True)
     log(f"==> doc linters -> {ctx.doc_lint_install_dir}")
 
-    scripts = [
-        ctx.automation_install / "doc-linters.sh",
-        ctx.automation_install / "shell-linters.sh",
-        ctx.automation_install / "reviewdog.sh",
-        ctx.automation_install / "actionlint.sh",
-    ]
-    for script in scripts:
-        log(f"==> {script.name}")
-        r = run_bash_script(ctx, script)
+    for cmd in (
+        ["pwnpatterns-ci", "install-linters"],
+        ["pwnpatterns-ci", "install-shell-linters"],
+        ["pwnpatterns-ci", "install-reviewdog"],
+        ["pwnpatterns-ci", "install-actionlint"],
+    ):
+        log(f"==> {' '.join(cmd)}")
+        r = uv_run_tool(ctx, pci, *cmd)
         if r.returncode != 0:
             log(r.stderr or r.stdout)
             return r.returncode
@@ -35,7 +35,6 @@ def run_setup(
     log("==> lychee")
     lychee_install = (
         "set -euo pipefail; "
-        f"source {ctx.automation_dir / 'lib' / 'env.sh'}; "
         f"source {ctx.docs_quality_dir.parent / 'lychee' / 'automation' / 'lib' / 'ci-steps-lychee.sh'}; "
         "lychee_install_cli"
     )
@@ -49,7 +48,7 @@ def run_setup(
 
     if with_vale:
         log("==> Vale styles")
-        r = run_bash_script(ctx, ctx.automation_bin / "vale-sync.sh")
+        r = uv_run_tool(ctx, pci, "pwnpatterns-ci", "vale-sync")
         if r.returncode != 0:
             return r.returncode
     else:

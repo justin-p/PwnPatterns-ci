@@ -27,6 +27,8 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+
       - name: Checkout platform
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -74,9 +76,13 @@ jobs:
           key: cache-lychee-v2-${{ github.sha }}
           restore-keys: cache-lychee-v2-
 
-      - name: Install reviewdog
+      - name: Load manifest and install reviewdog
         if: steps.targets.outputs.skip != 'true'
-        run: bash "${{ github.workspace }}/.github/pwnpatterns-ci/.github/docs-quality/automation/install/reviewdog.sh"
+        run: |
+          manifest="${{ github.workspace }}/.github/pwnpatterns-ci/.github/docs-quality/config/manifest.env"
+          grep -vE '^\s*(#|$)' "${manifest}" >> "${GITHUB_ENV}"
+          uv run --directory "${{ github.workspace }}/.github/pwnpatterns-ci/.github/docs-quality/tools/pwnpatterns-ci" \
+            pwnpatterns-ci install-reviewdog
 
       - name: Run lychee
         id: lychee
@@ -86,24 +92,48 @@ jobs:
           DOCS_QUALITY_DIR: ${{ github.workspace }}/.github/pwnpatterns-ci/.github/docs-quality
           CI_LINT_LOG_DIR: ${{ github.workspace }}/lint-logs
           DOC_LINT_INSTALL_DIR: /tmp
-          DOC_PATHS: ${{ steps.targets.outputs.paths }}
           REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           grep -vE '^\s*(#|$)' "${DOCS_QUALITY_DIR}/config/manifest.env" >> "${GITHUB_ENV}"
           export PATH="${DOC_LINT_INSTALL_DIR}:${PATH}"
           mkdir -p lint-logs
+          PWNPATTERNS_CI_UV="${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci"
+          LYCHEE_LIB="${REPO_ROOT}/.github/pwnpatterns-ci/.github/lychee/automation/lib"
           # shellcheck source=/dev/null
-          source "${DOCS_QUALITY_DIR}/automation/lib/ci-steps.sh"
-          mapfile -t paths < <(printf '%s\n' "${DOC_PATHS}" | sed '/^$/d')
+          source "${LYCHEE_LIB}/env.sh" 2>/dev/null || source "${DOCS_QUALITY_DIR}/automation/lib/env.sh"
+          # shellcheck source=/dev/null
+          source "${LYCHEE_LIB}/ci-steps-lychee.sh"
+          mapfile -t paths < <(uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci load-doc-paths "${{ steps.targets.outputs.paths }}")
           set +e
-          ci_lychee_pr "${paths[@]}"
+          ci_lychee_pr_check "${paths[@]}"
           ec=$?
           set -e
           if [ "${ec}" -eq 0 ]; then
             echo "exit_code=0" >> "$GITHUB_OUTPUT"
           else
             echo "exit_code=1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report to reviewdog
+        if: steps.targets.outputs.skip != 'true'
+        continue-on-error: true
+        env:
+          REPO_ROOT: ${{ github.workspace }}
+          DOCS_QUALITY_DIR: ${{ github.workspace }}/.github/pwnpatterns-ci/.github/docs-quality
+          DOC_LINT_INSTALL_DIR: /tmp
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          export PATH="${DOC_LINT_INSTALL_DIR}:${PATH}"
+          LYCHEE_LIB="${REPO_ROOT}/.github/pwnpatterns-ci/.github/lychee/automation/lib"
+          # shellcheck source=/dev/null
+          source "${LYCHEE_LIB}/env.sh"
+          # shellcheck source=/dev/null
+          source "${LYCHEE_LIB}/ci-steps-lychee.sh"
+          if [ -f "${REPO_ROOT}/lychee/report.json" ]; then
+            ci_lychee_report_reviewdog "${REPO_ROOT}/lychee/report.json"
           fi
 
       - name: Save lychee cache
@@ -115,4 +145,14 @@ jobs:
 
       - name: Fail on broken links
         if: steps.targets.outputs.skip != 'true' && steps.lychee.outputs.exit_code != '0'
-        run: exit 1
+        env:
+          REPO_ROOT: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          LYCHEE_LIB="${REPO_ROOT}/.github/pwnpatterns-ci/.github/lychee/automation/lib"
+          # shellcheck source=/dev/null
+          source "${LYCHEE_LIB}/env.sh"
+          # shellcheck source=/dev/null
+          source "${LYCHEE_LIB}/ci-steps-lychee.sh"
+          ci_lychee_print_broken_links "${REPO_ROOT}/lychee/report.json"
+          exit 1

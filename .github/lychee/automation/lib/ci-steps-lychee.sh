@@ -10,6 +10,29 @@ export CI_STEPS_LYCHEE_LOADED=1
 # shellcheck source=env.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/env.sh"
 
+# Reviewdog reporter selection (formerly in docs-quality ci-steps.sh / reviewdog-invoke.sh).
+ci_reviewdog_reporter() {
+  if [ "${CI_REVIEWDOG_MODE:-}" = local ] || [ -z "${GITHUB_ACTIONS:-}" ]; then
+    echo local
+  elif [ "${GITHUB_EVENT_NAME:-}" = pull_request ]; then
+    echo github-pr-review
+  else
+    echo github-check
+  fi
+}
+
+ci_reviewdog_fail_level() {
+  if [ "$(ci_reviewdog_reporter)" = local ]; then
+    echo none
+  else
+    echo error
+  fi
+}
+
+ci_reviewdog_filter_mode() {
+  echo nofilter
+}
+
 LYCHEE_VERSION="${LYCHEE_VERSION:-0.24.2}"
 LYCHEE_INSTALL_DIR="${LYCHEE_INSTALL_DIR:-${DOC_LINT_INSTALL_DIR:-/tmp}}"
 
@@ -86,23 +109,46 @@ ci_lychee_filter_403() {
   return 1
 }
 
+ci_lychee_print_broken_links() {
+  local report="${1:-lychee/report.json}"
+  if [ ! -f "${report}" ]; then
+    echo "lychee: no report at ${report}" >&2
+    return 1
+  fi
+  local errors suppressed
+  errors="$(jq '.errors // 0' "${report}")"
+  suppressed="$(jq '.datacenter_403_suppressed // 0' "${report}")"
+  echo "lychee: ${errors} broken link(s) after filtering (datacenter 403 suppressed: ${suppressed})" >&2
+  if [ "${errors}" -eq 0 ]; then
+    return 0
+  fi
+  jq -r '
+    .error_map // {} | to_entries[] |
+    .key as $file |
+    .value[]? |
+    "\($file):\(.span.line // 1):\(.span.column // 1): \(.url) (HTTP \(.status.code // "?") \(.status.text // ""))"
+  ' "${report}" >&2
+  return 1
+}
+
 ci_lychee_report_reviewdog() {
   local report="${1:-lychee/report.json}"
   if [ ! -f "${report}" ]; then
     echo "lychee report not found at ${report}" >&2
     return 1
   fi
-  local reporter fail_level filter_mode
-  if type -t ci_reviewdog_reporter >/dev/null 2>&1; then
-    reporter="$(ci_reviewdog_reporter)"
-    fail_level="$(ci_reviewdog_fail_level)"
-    filter_mode="$(ci_reviewdog_filter_mode)"
-  else
-    reporter=local
-    fail_level=none
-    filter_mode=nofilter
+  if ! command -v reviewdog >/dev/null 2>&1; then
+    echo "lychee: reviewdog not in PATH; skip PR review comments" >&2
+    return 0
   fi
+  local reporter fail_level filter_mode
+  reporter="$(ci_reviewdog_reporter)"
+  fail_level="$(ci_reviewdog_fail_level)"
+  filter_mode="$(ci_reviewdog_filter_mode)"
+  echo "lychee: reporting to reviewdog (reporter=${reporter}, filter-mode=${filter_mode})" >&2
   jq -r -L "${LYCHEE_JQ_LIB}" \
+    --arg repo_root "${REPO_ROOT:-${GITHUB_WORKSPACE:-}}" \
+    --argjson path_index "{}" \
     -f "${LYCHEE_TO_RDJSONL_JQ}" "${report}" |
     reviewdog -f=rdjsonl -name=lychee \
       -reporter="${reporter}" -fail-level="${fail_level}" -filter-mode="${filter_mode}" ||
@@ -171,14 +217,17 @@ ci_lychee_offline() {
   return "${lychee_exit}"
 }
 
-ci_lychee_pr() {
+ci_lychee_pr_check() {
   local -a paths=("$@")
   if [ "${#paths[@]}" -eq 0 ]; then
     mapfile -t paths < <(find docs -type f -name '*.md' | sort)
   fi
+  _ci_lychee_check_paths "lychee/report.json" "${paths[@]}"
+}
 
+ci_lychee_pr() {
   local filter_exit=0
-  _ci_lychee_check_paths "lychee/report.json" "${paths[@]}" || filter_exit=$?
+  ci_lychee_pr_check "$@" || filter_exit=$?
   ci_lychee_report_reviewdog lychee/report.json || true
   return "${filter_exit}"
 }

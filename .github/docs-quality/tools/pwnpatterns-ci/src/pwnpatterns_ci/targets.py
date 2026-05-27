@@ -27,16 +27,19 @@ def _git(*args: str, cwd: Path) -> str:
     return r.stdout if r.returncode == 0 else ""
 
 
-def doc_targets(layout: Layout) -> tuple[str, list[str], bool]:
+def doc_targets(layout: Layout, *, config_only_full_scan: bool = True) -> tuple[str, list[str], bool]:
     """Return (scan_mode, paths, skip)."""
     repo = load_repo_yml(layout.repo_yml_path())
     docs_dir = repo.get("docs_dir", "docs")
     root = layout.repo_root
     event = os.environ.get("GITHUB_EVENT_NAME", "push")
 
-    if event == "pull_request":
-        base = os.environ.get("GITHUB_EVENT_PULL_REQUEST_BASE_SHA", "origin/main")
-        head = os.environ.get("GITHUB_EVENT_PULL_REQUEST_HEAD_SHA", "HEAD")
+    base = os.environ.get("GITHUB_EVENT_PULL_REQUEST_BASE_SHA")
+    head = os.environ.get("GITHUB_EVENT_PULL_REQUEST_HEAD_SHA")
+
+    if event == "pull_request" or (base and head):
+        base = base or "origin/main"
+        head = head or "HEAD"
         pr_range = f"{base}...{head}"
         md_out = _git(
             "diff", "--name-only", "--diff-filter=ACMR", pr_range, "--", f"{docs_dir}/",
@@ -52,6 +55,8 @@ def doc_targets(layout: Layout) -> tuple[str, list[str], bool]:
             _CONFIG_PATTERN.match(f) for f in other_files
         )
         if config_only:
+            if not config_only_full_scan:
+                return "all", [], True
             all_md = sorted((root / docs_dir).rglob("*.md"))
             return "all", [layout.rel(p) for p in all_md], False
         return "all", [], True
