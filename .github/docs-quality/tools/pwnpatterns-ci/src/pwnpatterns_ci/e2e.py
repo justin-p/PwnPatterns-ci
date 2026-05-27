@@ -118,8 +118,12 @@ def run_e2e(
 
     def lint_job() -> None:
         if smoke_docs:
-            paths = sorted((layout.repo_root / "docs").glob("**/*.md"))[:5]
+            docs = layout.repo_root / "docs"
+            paths = sorted(docs.glob("**/*.md"))[:5] if docs.is_dir() else []
             paths = [layout.rel(p) for p in paths]
+            if not paths:
+                print("CI_E2E smoke-docs: no docs/*.md under repo root; skipping lint job.")
+                return
         else:
             scan_mode, paths, skip = doc_targets(layout)
             if skip and os.environ.get("CI_E2E_FULL_LINT") == "true":
