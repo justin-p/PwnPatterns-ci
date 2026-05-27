@@ -94,6 +94,18 @@ def _sync_allowlists(layout: Layout) -> None:
     subprocess.run([sys.executable, str(tool)], cwd=layout.repo_root, check=True)
 
 
+def _has_smoke_probe_fixtures(layout: Layout) -> bool:
+    """True when the consumer smoke PR fixtures are present (not just --smoke-docs on platform)."""
+    root = layout.repo_root
+    if (root / "docs/_ci_trigger_smoke").is_dir():
+        return True
+    if (root / ".github/workflows/ci-smoke-actionlint-probe.yml").is_file():
+        return True
+    if (root / ".github/ci-smoke-shellcheck-probe.sh").is_file():
+        return True
+    return False
+
+
 def run_e2e(
     layout: Layout,
     *,
@@ -110,12 +122,9 @@ def run_e2e(
     load_manifest(layout)
     results: dict[str, int] = {}
     expected = _load_expectations(layout)
-    if smoke_docs:
-        # Smoke mode intentionally includes probe fixtures that should fail:
-        # - Vale/rumdl/metadata on `docs/_ci_trigger_smoke/**`
-        # - Lychee broken link display on `docs/_ci_trigger_smoke/**`
-        # - actionlint/shellcheck probe workflows/scripts under `.github/`
-        # CI E2E is about the machinery reporting + exit handling, not about content debt being empty.
+    if smoke_docs and _has_smoke_probe_fixtures(layout):
+        # Consumer smoke PR fixtures intentionally fail content linters / probes.
+        # Platform repo may use --smoke-docs without these paths (no docs tree); keep default expectations.
         expected.update(
             {
                 "vale": 1,
