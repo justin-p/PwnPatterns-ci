@@ -18,6 +18,12 @@ _METADATA_RE = re.compile(
 _SHELLCHECK_RE = re.compile(r"^\.github/.*\.sh:\d+:\d+:")
 _DEFAULT_MAX_RESULTS_PR_REVIEW = 20
 _DEFAULT_MAX_RESULTS_CHECK = 10
+_PLATFORM_DOC_PATH_MARKERS = (
+    ".github/docs-quality/tools/pwnpatterns-ci/docs/",
+    ".github/pwnpatterns-ci/docs/",
+    "/.github/docs-quality/tools/pwnpatterns-ci/docs/",
+    "/.github/pwnpatterns-ci/docs/",
+)
 
 
 def reporter() -> str:
@@ -88,6 +94,33 @@ def _run_reviewdog(
     return subprocess.run(cmd, input=stdin, text=True, capture_output=True, check=False)
 
 
+def _normalize_path(path: str) -> str:
+    for marker in _PLATFORM_DOC_PATH_MARKERS:
+        if marker in path:
+            return f"docs/{path.split(marker, 1)[1]}"
+    return path
+
+
+def _normalize_rdjsonl_paths(stdin: str) -> str:
+    out: list[str] = []
+    for line in stdin.splitlines():
+        raw = line.strip()
+        if not raw:
+            continue
+        try:
+            diag = json.loads(raw)
+        except json.JSONDecodeError:
+            out.append(line)
+            continue
+        location = diag.get("location")
+        if isinstance(location, dict):
+            path = location.get("path")
+            if isinstance(path, str) and path:
+                location["path"] = _normalize_path(path)
+        out.append(json.dumps(diag, ensure_ascii=False))
+    return "\n".join(out) + ("\n" if out else "")
+
+
 def rdjsonl(
     name: str,
     stdin: str,
@@ -98,8 +131,8 @@ def rdjsonl(
     if not stdin.strip():
         return
     rep = rep or reporter()
-    payload = stdin
-    payload, omitted = _truncate_rdjsonl(stdin, max_results=_max_results(rep))
+    payload = _normalize_rdjsonl_paths(stdin)
+    payload, omitted = _truncate_rdjsonl(payload, max_results=_max_results(rep))
     if omitted:
         print(
             f"reviewdog: truncating {rep} payload by {omitted} finding(s)",
