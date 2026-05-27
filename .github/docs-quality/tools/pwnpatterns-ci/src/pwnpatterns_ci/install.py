@@ -26,7 +26,9 @@ def _sha256_file(path: Path) -> str:
 
 def download_verify(url: str, expected_sha256: str, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    with urllib.request.urlopen(url, timeout=300) as resp:
+    # Some hosts (e.g. languagetool.org) reject urllib's default user agent with 403.
+    req = urllib.request.Request(url, headers={"User-Agent": "PwnPatterns-ci/1.0"})
+    with urllib.request.urlopen(req, timeout=300) as resp:
         data = resp.read()
     dest.write_bytes(data)
     actual = _sha256_file(dest)
