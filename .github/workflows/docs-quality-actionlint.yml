@@ -25,6 +25,8 @@ jobs:
     env:
       DOCS_QUALITY_DIR: ${{ github.workspace }}/.github/pwnpatterns-ci/.github/docs-quality
       CONSUMER_CONFIG_DIR: ${{ github.workspace }}/.github/docs-quality/config
+      DOC_LINT_INSTALL_DIR: /tmp/doc-linters
+      PWNPATTERNS_CI_UV: ${{ github.workspace }}/.github/pwnpatterns-ci/.github/docs-quality/tools/pwnpatterns-ci
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -37,113 +39,11 @@ jobs:
           token: ${{ secrets.PWNPATTERNS_CI_CHECKOUT_TOKEN != '' && secrets.PWNPATTERNS_CI_CHECKOUT_TOKEN || github.token }}
 
       - name: Load docs-quality manifest
-        run: |
-          grep -vE '^\s*(#|$)' "${DOCS_QUALITY_DIR}/config/manifest.env" >> "${GITHUB_ENV}"
+        run: grep -vE '^\s*(#|$)' "${DOCS_QUALITY_DIR}/config/manifest.env" >> "${GITHUB_ENV}"
 
-      - name: Install shell linters
-        run: bash "${DOCS_QUALITY_DIR}/automation/install/shell-linters.sh"
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
 
-      - name: Install actionlint
-        run: bash "${DOCS_QUALITY_DIR}/automation/install/actionlint.sh"
-
-      - uses: reviewdog/action-setup@d8a7baabd7f3e8544ee4dbde3ee41d0011c3a93f # v1.5.0
-
-      - name: Run shellcheck
-        run: |
-          set -euo pipefail
-          mkdir -p lint-logs
-          mapfile -t scripts < <(
-            find .github -type f -name '*.sh' ! -path '*/pwnpatterns-ci/*' 2>/dev/null | sort
-          )
-          if [ "${#scripts[@]}" -eq 0 ]; then
-            echo 0 >lint-logs/shellcheck.exit
-            exit 0
-          fi
-          shellcheck_rc="${CONSUMER_CONFIG_DIR}/shellcheckrc"
-          shellcheck_args=(-f checkstyle -x)
-          if [ -f "${shellcheck_rc}" ]; then
-            shellcheck_args+=(--rcfile="${shellcheck_rc}")
-          fi
-          set +e
-          shellcheck "${shellcheck_args[@]}" "${scripts[@]}" >lint-logs/shellcheck.txt 2>lint-logs/shellcheck.stderr
-          echo "$?" >lint-logs/shellcheck.exit
-          set -e
-
-      - name: Run actionlint
-        run: |
-          set -euo pipefail
-          export PATH="${DOC_LINT_INSTALL_DIR:-/tmp}:${PATH}"
-          mkdir -p lint-logs
-          mapfile -t workflows < <(
-            find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) \
-              ! -path '*/pwnpatterns-ci/*' 2>/dev/null | sort
-          )
-          if [ "${#workflows[@]}" -eq 0 ]; then
-            echo 0 >lint-logs/actionlint.exit
-            exit 0
-          fi
-          set +e
-          actionlint "${workflows[@]}" >lint-logs/actionlint.txt 2>&1
-          echo "$?" >lint-logs/actionlint.exit
-          set -e
-
-      - name: Check shfmt
-        run: |
-          set -euo pipefail
-          mapfile -t scripts < <(
-            find .github -type f -name '*.sh' ! -path '*/pwnpatterns-ci/*' 2>/dev/null | sort
-          )
-          if [ "${#scripts[@]}" -eq 0 ]; then
-            echo 0 >lint-logs/shfmt.exit
-            exit 0
-          fi
-          set +e
-          shfmt -d -ln bash -i 2 -ci "${scripts[@]}" | tee lint-logs/shfmt.diff
-          echo "${PIPESTATUS[0]}" >lint-logs/shfmt.exit
-          set -e
-
-      - name: Report actionlint (reviewdog)
+      - name: Run actionlint job
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          if [ ! -s lint-logs/actionlint.txt ]; then
-            exit 0
-          fi
-          reviewdog -f=actionlint -name=actionlint \
-            -reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}" \
-            -fail-level=error -filter-mode=nofilter \
-            <lint-logs/actionlint.txt || true
-
-      - name: Report shellcheck (reviewdog)
-        env:
-          REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          if [ ! -s lint-logs/shellcheck.txt ]; then
-            exit 0
-          fi
-          # shellcheck source=/dev/null
-          source "${DOCS_QUALITY_DIR}/automation/lib/reviewdog-shellcheck.sh"
-          reviewdog_shellcheck_checkstyle lint-logs/shellcheck.txt shellcheck \
-            -reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}" \
-            -fail-level=any -filter-mode=nofilter
-
-      - name: Fail on shellcheck, shfmt, or actionlint
-        run: |
-          set -euo pipefail
-          fail=0
-          if [ -f lint-logs/shellcheck.exit ] && [ "$(cat lint-logs/shellcheck.exit)" -ne 0 ]; then
-            cat lint-logs/shellcheck.stderr 2>/dev/null || true
-            fail=1
-          fi
-          if [ -f lint-logs/shfmt.exit ] && [ "$(cat lint-logs/shfmt.exit)" -ne 0 ]; then
-            echo "shfmt: formatting differs (see lint-logs/shfmt.diff)" >&2
-            cat lint-logs/shfmt.diff 2>/dev/null || true
-            fail=1
-          fi
-          if [ -f lint-logs/actionlint.exit ] && [ "$(cat lint-logs/actionlint.exit)" -ne 0 ]; then
-            cat lint-logs/actionlint.txt 2>/dev/null || true
-            fail=1
-          fi
-          exit "${fail}"
+        run: uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci actionlint-job lint-logs

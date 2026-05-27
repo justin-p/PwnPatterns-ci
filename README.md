@@ -7,7 +7,6 @@ Push this tree to the private **`ocd-nl/pwnpatterns-ci`** repository.
 | Script | Purpose |
 |--------|---------|
 | [`scripts/ensure-platform.sh`](scripts/ensure-platform.sh) | Clone/checkout this repo into a consumer’s `.github/pwnpatterns-ci/` (set `REPO_ROOT` to the pattern repo) |
-| [`scripts/run-with-platform.sh`](scripts/run-with-platform.sh) | Run automation under `.github/docs-quality/automation/bin/` |
 | [`scripts/docs-dev.sh`](scripts/docs-dev.sh) | docs-dev TUI / CLI |
 | [`scripts/consumer-ensure-platform.sh`](scripts/consumer-ensure-platform.sh) | **Vendored** into pattern repos as `scripts/ensure-platform.sh` |
 

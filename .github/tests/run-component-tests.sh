@@ -35,7 +35,6 @@ else
 fi
 
 DOCS_DEV_FIXTURES="${DOCS_QUALITY_DIR}/tools/docs-dev/tests/fixtures"
-FILTERS_LIB="${DOCS_QUALITY_DIR}/automation/filters/lib"
 
 _resolve_lychee_automation() {
   for d in \
@@ -62,6 +61,7 @@ _resolve_lychee_config() {
 
 LYCHEE_AUTOMATION="$(_resolve_lychee_automation)"
 LYCHEE_CONFIG="$(_resolve_lychee_config)"
+FILTERS_LIB="${LYCHEE_AUTOMATION}/filters/lib"
 
 failures=0
 pass() { echo "PASS: $*"; }
@@ -80,6 +80,13 @@ require_cmd() {
 }
 
 require_cmd jq
+
+PWNPATTERNS_CI_UV="${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci"
+prose_rdjsonl() {
+  local tool="$1"
+  local log_dir="$2"
+  uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci prose-to-rdjsonl "${tool}" "${log_dir}"
+}
 
 reviewdog_local() {
   if ! command -v reviewdog >/dev/null 2>&1; then
@@ -126,7 +133,8 @@ test_lychee_403_filter() {
   else
     fail "lychee 403 filter (errors=${errors}, suppressed=${suppressed})"
   fi
-  jq -r -L "${FILTERS_LIB}" -f "${LYCHEE_AUTOMATION}/filters/to-rdjsonl.jq" "${tmp}" >"${tmp}.rdjsonl"
+  jq -r -L "${FILTERS_LIB}" --argjson path_index '{}' --arg repo_root "" \
+    -f "${LYCHEE_AUTOMATION}/filters/to-rdjsonl.jq" "${tmp}" >"${tmp}.rdjsonl"
   assert_jsonl_nonempty "lychee to-rdjsonl" "${tmp}.rdjsonl"
   if ! jq -se '.[0].message | contains("[lychee]") and contains("Broken link")' "${tmp}.rdjsonl" |
     grep -q true; then
@@ -153,22 +161,20 @@ test_vale_jq() {
   vale_fixture="${DOCS_DEV_FIXTURES}/vale_sample.json"
   cp "${vale_fixture}" "${tmp}/vale.json"
   out="$(mktemp)"
-  bash "${DOCS_QUALITY_DIR}/automation/bin/prose-to-rdjsonl.sh" vale "${tmp}" >"${out}"
+  prose_rdjsonl vale "${tmp}" >"${out}"
   assert_jsonl_nonempty "vale-to-rdjsonl" "${out}"
-  vale_fixture="${DOCS_DEV_FIXTURES}/vale_contractions_sample.json"
-  if ! jq -r -L "${FILTERS_LIB}" --argjson path_index '{}' \
-    -f "${DOCS_QUALITY_DIR}/automation/filters/vale-to-rdjsonl.jq" \
-    "${vale_fixture}" | jq -se 'map(select(.message | startswith("[vale]"))) | length > 0' |
+  cp "${DOCS_DEV_FIXTURES}/vale_contractions_sample.json" "${tmp}/vale.json"
+  contractions_out="$(mktemp)"
+  prose_rdjsonl vale "${tmp}" >"${contractions_out}"
+  if ! jq -se 'map(select(.message | startswith("[vale]"))) | length > 0' "${contractions_out}" |
     grep -q true; then
     fail "vale-to-rdjsonl: expected [vale]-prefixed messages"
   fi
-  if ! jq -r -L "${FILTERS_LIB}" --argjson path_index '{}' \
-    -f "${DOCS_QUALITY_DIR}/automation/filters/vale-to-rdjsonl.jq" \
-    "${DOCS_DEV_FIXTURES}/vale_contractions_sample.json" |
-    jq -se 'map(select(.suggestions | length > 0)) | length > 0' |
+  if ! jq -se 'map(select(.suggestions | length > 0)) | length > 0' "${contractions_out}" |
     grep -q true; then
     fail "vale-to-rdjsonl: expected suggestions for PwnPatterns.Contractions"
   fi
+  rm -f "${contractions_out}"
   pass "vale-to-rdjsonl enriched messages"
   pass "vale-to-rdjsonl suggestions"
   if reviewdog_local; then
@@ -185,7 +191,7 @@ test_harper_jq() {
   cp "${DOCS_DEV_FIXTURES}/harper_sample.json" "${tmp}/harper.json"
   cp "${DOCS_DEV_FIXTURES}/lint-paths.lst" "${tmp}/lint-paths.lst"
   out="$(mktemp)"
-  bash "${DOCS_QUALITY_DIR}/automation/bin/prose-to-rdjsonl.sh" harper "${tmp}" >"${out}"
+  prose_rdjsonl harper "${tmp}" >"${out}"
   assert_jsonl_nonempty "harper-to-rdjsonl" "${out}"
   if ! jq -se 'map(.location.path) | all(test("^docs/"))' "${out}" | grep -q true; then
     fail "harper-to-rdjsonl: expected repo-relative paths under docs/"
@@ -211,7 +217,7 @@ test_textlint_jq() {
   cp "${DOCS_DEV_FIXTURES}/textlint_sample.json" "${tmp}/textlint.json"
   printf '%s\n' "docs/nl/sample.md" >"${tmp}/lint-paths.lst"
   out="$(mktemp)"
-  bash "${DOCS_QUALITY_DIR}/automation/bin/prose-to-rdjsonl.sh" textlint "${tmp}" >"${out}"
+  prose_rdjsonl textlint "${tmp}" >"${out}"
   assert_jsonl_nonempty "textlint-to-rdjsonl" "${out}"
   if ! jq -se '.[0].message | contains("[textlint]") and contains("foutwoord")' "${out}" | grep -q true; then
     fail "textlint-to-rdjsonl: expected enriched spelling message"
@@ -228,7 +234,7 @@ test_typos_jq() {
   cp "${DOCS_DEV_FIXTURES}/typos_sample.jsonl" "${tmp}/typos.json"
   printf '%s\n' "docs/ad/general/Account_Password_Extraction_Via_Kerberoasting/Account_Password_Extraction_Via_Kerberoasting.md" >"${tmp}/lint-paths.lst"
   out="$(mktemp)"
-  bash "${DOCS_QUALITY_DIR}/automation/bin/prose-to-rdjsonl.sh" typos "${tmp}" >"${out}"
+  prose_rdjsonl typos "${tmp}" >"${out}"
   assert_jsonl_nonempty "typos-to-rdjsonl" "${out}"
   if ! jq -se '.[0].message | contains("«Identifing»") and contains("Suggested")' "${out}" | grep -q true; then
     fail "typos-to-rdjsonl: expected matched typo and suggestion in message"
@@ -240,11 +246,11 @@ test_typos_jq() {
 }
 
 test_rumdl_jq() {
-  local out
+  local out tmp
+  tmp="$(mktemp -d)"
+  cp "${FIXTURES}/rumdl/sample.json" "${tmp}/rumdl.json"
   out="$(mktemp)"
-  jq -r -L "${FILTERS_LIB}" --argjson path_index '{}' \
-    -f "${DOCS_QUALITY_DIR}/automation/filters/rumdl-to-rdjsonl.jq" \
-    "${FIXTURES}/rumdl/sample.json" >"${out}"
+  prose_rdjsonl rumdl "${tmp}" >"${out}"
   assert_jsonl_nonempty "rumdl-to-rdjsonl" "${out}"
   if ! jq -se '.[0].message | startswith("[rumdl]")' "${out}" | grep -q true; then
     fail "rumdl-to-rdjsonl: expected enriched message prefix"
@@ -256,6 +262,7 @@ test_rumdl_jq() {
       <"${out}" >/dev/null 2>&1 && pass "reviewdog rumdl" || fail "reviewdog rumdl"
   fi
   rm -f "${out}"
+  rm -rf "${tmp}"
 }
 
 test_verify_metadata_rdjsonl() {
@@ -294,8 +301,13 @@ test_sync_allowlists_smoke() {
     echo "SKIP: uv not installed (sync_allowlists)"
     return 0
   fi
+  local terms="${REPO_ROOT}/.github/docs-quality/config/allowlists/terms.txt"
+  if [ ! -f "${terms}" ]; then
+    echo "SKIP: consumer allowlists not present in ${REPO_ROOT} (platform-only checkout)"
+    return 0
+  fi
   if uv_run_tool "${DOCS_QUALITY_DIR}/tools/sync-allowlists" \
-    python -c "from sync_allowlists import read_terms; from pathlib import Path; t=read_terms(Path('${REPO_ROOT}/.github/docs-quality/config/allowlists/terms.txt')); assert len(t) >= 0"; then
+    python -c "from sync_allowlists import read_terms; from pathlib import Path; t=read_terms(Path('${terms}')); assert len(t) >= 0"; then
     pass "sync-allowlists import and read_terms"
   else
     fail "sync-allowlists smoke"
@@ -308,7 +320,7 @@ test_languagetool_jq() {
   cp "${DOCS_DEV_FIXTURES}/languagetool_sample.json" "${tmp}/languagetool.json"
   printf '%s\n' "docs/example/nl_pattern.md" >"${tmp}/lint-paths.lst"
   out="$(mktemp)"
-  bash "${DOCS_QUALITY_DIR}/automation/bin/prose-to-rdjsonl.sh" languagetool "${tmp}" >"${out}"
+  prose_rdjsonl languagetool "${tmp}" >"${out}"
   assert_jsonl_nonempty "languagetool-to-rdjsonl" "${out}"
   if ! jq -se 'map(.location.path) | all(test("^docs/"))' "${out}" | grep -q true; then
     fail "languagetool-to-rdjsonl: expected repo-relative paths"
@@ -380,8 +392,7 @@ EOF
 }
 
 test_record_lint_exits() {
-  local log_dir script
-  script="${DOCS_QUALITY_DIR}/automation/bin/record-lint-exits.sh"
+  local log_dir
   log_dir="$(mktemp -d)"
   cp "${DOCS_DEV_FIXTURES}/vale_sample.json" "${log_dir}/vale.json"
   cp "${DOCS_DEV_FIXTURES}/typos_sample.jsonl" "${log_dir}/typos.json"
@@ -390,7 +401,7 @@ test_record_lint_exits() {
   echo '[]' >"${log_dir}/languagetool.json"
   echo 0 >"${log_dir}/metadata.exit"
   : >"${log_dir}/metadata.rdjsonl"
-  bash "${script}" "${log_dir}" 2>/dev/null
+  uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci record-exits "${log_dir}" 2>/dev/null
   assert_exit "record-lint-exits vale" "${log_dir}/vale.exit" 1
   assert_exit "record-lint-exits typos" "${log_dir}/typos.exit" 1
   assert_exit "record-lint-exits rumdl" "${log_dir}/rumdl.exit" 1
@@ -398,9 +409,9 @@ test_record_lint_exits() {
   assert_exit "record-lint-exits languagetool" "${log_dir}/languagetool.exit" 0
   echo '[{"file":"docs/x.md","matches":[{"message":"x","rule":{"id":"R","issueType":"misspelling"}}]}]' \
     >"${log_dir}/languagetool.json"
-  bash "${script}" "${log_dir}" 2>/dev/null
+  uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci record-exits "${log_dir}" 2>/dev/null
   assert_exit "record-lint-exits languagetool (matches)" "${log_dir}/languagetool.exit" 1
-  bash "${script}" "${log_dir}" 2>/dev/null
+  uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci record-exits "${log_dir}" 2>/dev/null
   assert_exit "record-lint-exits metadata" "${log_dir}/metadata.exit" 0
   rm -rf "${log_dir}"
 }
@@ -408,7 +419,7 @@ test_record_lint_exits() {
 test_load_doc_paths() {
   local -a paths=()
   export DOC_PATHS=$'docs/a.md\ndocs/b.md\n'
-  mapfile -t paths < <(bash "${DOCS_QUALITY_DIR}/automation/bin/load-doc-paths.sh")
+  mapfile -t paths < <(uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci load-doc-paths "$(printf '%s' "${DOC_PATHS}")")
   if [ "${#paths[@]}" -ne 2 ] || [ "${paths[0]}" != "docs/a.md" ] || [ "${paths[1]}" != "docs/b.md" ]; then
     fail "load-doc-paths: expected 2 paths, got ${#paths[@]}: ${paths[*]-}"
   else

@@ -87,7 +87,7 @@
   "postUpgradeTasks": [
     {
       "commands": [
-        "uv run --directory .github/docs-quality/tools/pwnpatterns-ci pwnpatterns-ci ci refresh-checksums",
+        "uv run --directory .github/docs-quality/tools/pwnpatterns-ci pwnpatterns-ci refresh-checksums",
         "uv run --directory .github/docs-quality/tools/docs-dev pytest tests/test_manifest.py tests/test_allowlist.py tests/test_tui_e2e.py -q --tb=short"
       ],
       "fileFilters": [".github/docs-quality/config/manifest.env"],

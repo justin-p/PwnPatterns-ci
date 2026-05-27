@@ -59,16 +59,17 @@ def _setup_job(
 ) -> int:
     _progress(on_progress, "Preparing Harper config…")
     ctx.prepare_harper_config()
+    pci = ctx.docs_quality_dir / "tools" / "pwnpatterns-ci"
     _progress(on_progress, "Syncing allowlists…")
-    r = run_bash_script(ctx, ctx.automation_bin / "sync-allowlists.sh")
+    r = uv_run_tool(ctx, pci, "pwnpatterns-ci", "sync-allowlists")
     if r.returncode != 0:
         return r.returncode
     _progress(on_progress, "Verifying doc linters…")
-    r = run_bash_script(ctx, ctx.automation_install / "doc-linters.sh")
+    r = uv_run_tool(ctx, pci, "pwnpatterns-ci", "install-linters")
     if r.returncode != 0:
         return r.returncode
     _progress(on_progress, "Syncing Vale styles…")
-    run_bash_script(ctx, ctx.automation_bin / "vale-sync.sh")
+    uv_run_tool(ctx, pci, "pwnpatterns-ci", "vale-sync")
     _progress(on_progress, "Preparing metadata validator…")
     meta_project = ctx.docs_quality_dir / "tools" / "verify-metadata"
     run(ctx, ["uv", "sync", "--directory", str(meta_project)], capture=True)
@@ -207,23 +208,26 @@ def _run_prose_tools(
         on_progress,
         f"Prose lint on {len(paths)} file(s) (vale, typos, textlint, rumdl, harper, languagetool)…",
     )
-    script = ctx.automation_bin / "run-parallel-prose-lint.sh"
+    pci = ctx.docs_quality_dir / "tools" / "pwnpatterns-ci"
     if on_progress is not None:
-        code = stream_bash_script(
+        code = uv_run_tool_streamed(
             ctx,
-            script,
+            pci,
+            "pwnpatterns-ci",
+            "lint-prose",
             str(ctx.lint_log_dir),
             on_line=on_progress,
-        )
+        ).returncode
     else:
-        code = run_bash_script(ctx, script, str(ctx.lint_log_dir)).returncode
+        code = uv_run_tool(
+            ctx, pci, "pwnpatterns-ci", "lint-prose", str(ctx.lint_log_dir)
+        ).returncode
     return code != 0 or _prose_failed(ctx)
 
 
 def _record_lint_exits_from_json(ctx: RepoContext) -> None:
-    script = ctx.automation_bin / "record-lint-exits.sh"
-    if script.is_file():
-        run_bash_script(ctx, script, str(ctx.lint_log_dir))
+    pci = ctx.docs_quality_dir / "tools" / "pwnpatterns-ci"
+    uv_run_tool(ctx, pci, "pwnpatterns-ci", "record-exits", str(ctx.lint_log_dir))
 
 
 def run_prose_lint(
@@ -311,13 +315,16 @@ def _run_metadata(
 
 
 def _lychee_bash(ctx: RepoContext, paths: list[str], *, offline: bool) -> str:
-    lychee_lib = ctx.docs_quality_dir.parent / "lychee" / "automation" / "lib" / "ci-steps-lychee.sh"
+    lychee_lib = ctx.docs_quality_dir.parent / "lychee" / "automation" / "lib"
     fn = "ci_lychee_offline" if offline else "ci_lychee_docs_dev"
     path_args = " ".join(shlex.quote(p) for p in paths)
     return (
         "set -euo pipefail; "
-        f"source {ctx.automation_dir / 'lib' / 'env.sh'}; "
-        f"source {lychee_lib}; "
+        f"export REPO_ROOT={shlex.quote(str(ctx.repo_root))}; "
+        f"export DOCS_QUALITY_DIR={shlex.quote(str(ctx.docs_quality_dir))}; "
+        f"export DOC_LINT_INSTALL_DIR={shlex.quote(str(ctx.doc_lint_install_dir))}; "
+        f"source {lychee_lib / 'env.sh'}; "
+        f"source {lychee_lib / 'ci-steps-lychee.sh'}; "
         f"export CI_LINT_LOG_DIR={shlex.quote(str(ctx.lint_log_dir))}; "
         f"{fn} {path_args}"
     )
@@ -383,14 +390,17 @@ def _run_shell(
     label = "shellcheck/shfmt (autofix)…" if autofix else "shellcheck/shfmt…"
     _progress(on_progress, f"Linting {label}")
     env = {"CI_LINT_AUTOFIX": "true"} if autofix else {}
-    script = ctx.automation_bin / "lint-shell.sh"
+    pci = ctx.docs_quality_dir / "tools" / "pwnpatterns-ci"
+    args = ["pwnpatterns-ci", "lint-shell"]
+    if env.get("CI_LINT_AUTOFIX") == "true":
+        args.append("--autofix")
     if on_progress is not None:
-        code = stream_bash_script(ctx, script, env_extra=env, on_line=on_progress)
+        code = uv_run_tool_streamed(ctx, pci, *args, on_line=on_progress).returncode
         return StepResult(
             name="shell",
             status=StepStatus.PASS if code == 0 else StepStatus.FAIL,
         )
-    r = run_bash_script(ctx, script, env_extra=env)
+    r = uv_run_tool(ctx, pci, *args)
     return StepResult(
         name="shell",
         status=StepStatus.PASS if r.returncode == 0 else StepStatus.FAIL,

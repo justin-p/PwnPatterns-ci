@@ -63,10 +63,10 @@ def build_path_index(log_dir: Path, paths: list[str]) -> None:
 
 
 def route_grammar(layout: Layout, log_dir: Path) -> None:
-    bin_sh = layout.automation_dir / "bin" / "route-grammar-paths.sh"
-    if bin_sh.is_file():
+    script = layout.docs_quality_dir / "tools" / "grammar-routing" / "route_grammar_paths.py"
+    if script.is_file():
         subprocess.run(
-            ["bash", str(bin_sh), str(log_dir)],
+            [sys.executable, str(script), str(log_dir)],
             cwd=layout.repo_root,
             check=True,
             env=os.environ.copy(),

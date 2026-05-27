@@ -57,5 +57,6 @@ jobs:
           CI_E2E_SKIP_PREK: "true"
           DOC_LINT_INSTALL_DIR: /tmp/doc-linters
         run: |
+          grep -vE '^\s*(#|$)' "${DOCS_QUALITY_DIR}/config/manifest.env" >> "${GITHUB_ENV}"
           uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
-            pwnpatterns-ci ci run-e2e --job all --smoke-docs
+            pwnpatterns-ci run-e2e --job all --smoke-docs

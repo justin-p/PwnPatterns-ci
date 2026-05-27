@@ -23,6 +23,7 @@ env:
   DOCS_QUALITY_DIR: ${{ github.workspace }}/.github/pwnpatterns-ci/.github/docs-quality
   CONSUMER_CONFIG_DIR: ${{ github.workspace }}/.github/docs-quality/config
   DOC_LINT_INSTALL_DIR: /tmp/doc-linters
+  PWNPATTERNS_CI_UV: ${{ github.workspace }}/.github/pwnpatterns-ci/.github/docs-quality/tools/pwnpatterns-ci
 
 jobs:
   lint:
@@ -65,8 +66,7 @@ jobs:
           GITHUB_EVENT_PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GITHUB_EVENT_PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
-            pwnpatterns-ci ci doc-targets
+          uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci doc-targets
 
       - name: Stop when no documentation targets
         if: steps.targets.outputs.skip == 'true'
@@ -74,9 +74,7 @@ jobs:
 
       - name: Sync allowlists
         if: steps.targets.outputs.skip != 'true'
-        run: |
-          uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
-            pwnpatterns-ci ci sync-allowlists
+        run: uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci sync-allowlists
 
       - name: Restore Vale styles cache
         if: steps.targets.outputs.skip != 'true'
@@ -102,15 +100,11 @@ jobs:
 
       - name: Install documentation linters
         if: steps.targets.outputs.skip != 'true'
-        run: |
-          uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
-            pwnpatterns-ci ci install-linters
+        run: uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci install-linters
 
       - name: Sync Vale packages
         if: steps.targets.outputs.skip != 'true'
-        run: |
-          uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
-            pwnpatterns-ci ci vale-sync
+        run: uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci vale-sync
 
       - name: Save Vale styles cache
         if: steps.targets.outputs.skip != 'true'
@@ -127,12 +121,15 @@ jobs:
         if: steps.targets.outputs.skip != 'true'
         run: |
           mkdir -p "${GITHUB_WORKSPACE}/lint-logs"
-          export DOC_PATHS="$(bash "${DOCS_QUALITY_DIR}/automation/bin/load-doc-paths.sh" "${{ steps.targets.outputs.paths }}")"
-          uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
-            pwnpatterns-ci ci lint-prose "${GITHUB_WORKSPACE}/lint-logs"
+          paths_file="${GITHUB_WORKSPACE}/lint-logs/lint-paths.lst"
+          uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci load-doc-paths \
+            "${{ steps.targets.outputs.paths }}" > "${paths_file}"
+          export DOC_PATHS="$(cat "${paths_file}")"
+          uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci lint-prose "${GITHUB_WORKSPACE}/lint-logs"
 
-      - uses: reviewdog/action-setup@d8a7baabd7f3e8544ee4dbde3ee41d0011c3a93f # v1.5.0
+      - name: Install reviewdog
         if: steps.targets.outputs.skip != 'true'
+        run: uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci install-reviewdog
 
       - name: Verify pattern metadata
         if: steps.targets.outputs.skip != 'true'
@@ -142,28 +139,23 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "${GITHUB_WORKSPACE}/lint-logs"
-          mapfile -t paths < <(bash "${DOCS_QUALITY_DIR}/automation/bin/load-doc-paths.sh" "${{ steps.targets.outputs.paths }}")
+          paths_file="${GITHUB_WORKSPACE}/lint-logs/lint-paths.lst"
+          uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci load-doc-paths \
+            "${{ steps.targets.outputs.paths }}" > "${paths_file}"
           if [ "${{ steps.targets.outputs.scan_mode }}" = "all" ]; then
-            mapfile -t paths < <(find docs -type f -name '*.md' | sort)
+            find docs -type f -name '*.md' | sort > "${paths_file}"
           fi
-          set +e
-          uv run --directory "${DOCS_QUALITY_DIR}/tools/verify-metadata" \
-            python verify_metadata.py --rdjsonl "${paths[@]}" \
-            >"${GITHUB_WORKSPACE}/lint-logs/metadata.rdjsonl" 2>"${GITHUB_WORKSPACE}/lint-logs/metadata.stderr"
-          echo "$?" >"${GITHUB_WORKSPACE}/lint-logs/metadata.exit"
-          set -e
-          uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
-            pwnpatterns-ci ci record-exits "${GITHUB_WORKSPACE}/lint-logs"
+          uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci verify-metadata \
+            "${GITHUB_WORKSPACE}/lint-logs" \
+            --scan-mode "${{ steps.targets.outputs.scan_mode }}" \
+            --paths-file "${paths_file}" || true
+          uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci record-exits "${GITHUB_WORKSPACE}/lint-logs"
 
       - name: Run prek
         if: steps.targets.outputs.skip != 'true'
         continue-on-error: true
         run: |
-          mkdir -p "${GITHUB_WORKSPACE}/lint-logs"
-          set +e
-          prek run --all-files --show-diff-on-failure 2>&1 | tee "${GITHUB_WORKSPACE}/lint-logs/prek.log"
-          echo "${PIPESTATUS[0]}" >"${GITHUB_WORKSPACE}/lint-logs/prek.exit"
-          set -e
+          uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci run-prek "${GITHUB_WORKSPACE}/lint-logs" || true
 
       - name: Report to reviewdog
         if: steps.targets.outputs.skip != 'true'
@@ -174,14 +166,13 @@ jobs:
           LINT_LOG_DIR: ${{ github.workspace }}/lint-logs
         run: |
           reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}"
-          bash "${DOCS_QUALITY_DIR}/automation/bin/report-docs-quality-reviewdog.sh" "${reporter}"
-          bash "${DOCS_QUALITY_DIR}/automation/bin/report-prek-reviewdog.sh" "${reporter}"
+          uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci report-reviewdog \
+            "${GITHUB_WORKSPACE}/lint-logs" --reporter "${reporter}"
 
       - name: Fail on content linters
         if: steps.targets.outputs.skip != 'true'
         run: |
-          uv run --directory "${DOCS_QUALITY_DIR}/tools/pwnpatterns-ci" \
-            pwnpatterns-ci ci report-failures "${GITHUB_WORKSPACE}/lint-logs"
+          uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci report-failures "${GITHUB_WORKSPACE}/lint-logs"
 
       - name: Fail on prek
         if: steps.targets.outputs.skip != 'true'
