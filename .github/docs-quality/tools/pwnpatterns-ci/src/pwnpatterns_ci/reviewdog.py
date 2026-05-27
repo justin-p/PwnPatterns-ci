@@ -62,7 +62,40 @@ def _truncate_rdjsonl(stdin: str, *, max_results: int) -> tuple[str, int]:
     if len(lines) <= max_results:
         return stdin, 0
 
-    kept = lines[:max_results]
+    # Keep at least one finding per tool (by message prefix) before filling
+    # remaining slots in original order. This prevents one noisy tool from
+    # fully starving others (e.g. textlint hiding LanguageTool).
+    indexed: list[tuple[int, str, str]] = []
+    for i, raw in enumerate(lines):
+        try:
+            diag = json.loads(raw)
+        except json.JSONDecodeError:
+            indexed.append((i, "unknown", raw))
+            continue
+        message = str(diag.get("message") or "")
+        m = re.match(r"^\[([^\]]+)\]", message)
+        tool = (m.group(1).lower() if m else "unknown")
+        indexed.append((i, tool, raw))
+
+    selected: list[int] = []
+    seen_tools: set[str] = set()
+    for i, tool, _ in indexed:
+        if tool in seen_tools:
+            continue
+        selected.append(i)
+        seen_tools.add(tool)
+        if len(selected) >= max_results:
+            break
+    if len(selected) < max_results:
+        for i, _, _ in indexed:
+            if i in selected:
+                continue
+            selected.append(i)
+            if len(selected) >= max_results:
+                break
+
+    selected_set = set(selected)
+    kept = [raw for i, raw in enumerate(lines) if i in selected_set][:max_results]
     omitted = len(lines) - max_results
     first = json.loads(kept[0])
     location = first.get("location") or {}
