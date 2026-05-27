@@ -193,7 +193,7 @@ def report_actionlint(stdout: str, rep: str | None = None) -> None:
     subprocess.run(
         [
             "reviewdog",
-            "-f=actionlint",
+            "-efm=%f:%l:%c: %m",
             "-name=actionlint",
             f"-reporter={rep}",
             f"-fail-level={fail_level(rep)}",

@@ -30,31 +30,12 @@ def test_vale_parser_marks_contractions_fixable() -> None:
     assert findings[0].column == 6
 
 
-def test_vale_jq_emits_suggestions() -> None:
-    import json
-    import subprocess
-
-    filters = Path(__file__).resolve().parents[3] / "automation" / "filters"
-    jq = filters / "vale-to-rdjsonl.jq"
-    fixture = FIXTURES / "vale_contractions_sample.json"
-    proc = subprocess.run(
-        [
-            "jq",
-            "-r",
-            "-L",
-            str(filters / "lib"),
-            "--argjson",
-            "path_index",
-            "{}",
-            "-f",
-            str(jq),
-            str(fixture),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    rows = [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
-    contraction = next(r for r in rows if "Contractions" in r["message"])
-    assert contraction["suggestions"][0]["text"] == "was not"
-    assert contraction["location"]["range"]["start"]["column"] == 6
+def test_vale_fixture_contains_replace_actions() -> None:
+    data = load_vale_json(FIXTURES / "vale_contractions_sample.json")
+    fixes = collect_contraction_fixes(data)
+    first = fixes[0]
+    assert first.path == "docs/example/contractions.md"
+    assert first.line == 1
+    assert first.span_start == 6
+    assert first.span_end == 11
+    assert first.replacement == "was not"
