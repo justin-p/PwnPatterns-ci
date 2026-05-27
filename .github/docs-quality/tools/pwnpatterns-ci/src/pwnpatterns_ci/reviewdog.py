@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -15,6 +16,7 @@ _METADATA_RE = re.compile(
     re.MULTILINE,
 )
 _SHELLCHECK_RE = re.compile(r"^\.github/.*\.sh:\d+:\d+:")
+_DEFAULT_MAX_RESULTS = 20
 
 
 def reporter() -> str:
@@ -34,6 +36,55 @@ def filter_mode(rep: str | None = None) -> str:
     return "nofilter"
 
 
+def _max_results() -> int:
+    raw = os.environ.get("REVIEWDOG_MAX_RESULTS", str(_DEFAULT_MAX_RESULTS))
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return _DEFAULT_MAX_RESULTS
+
+
+def _truncate_rdjsonl(stdin: str, *, max_results: int) -> tuple[str, int]:
+    lines = [ln for ln in stdin.splitlines() if ln.strip()]
+    if len(lines) <= max_results:
+        return stdin, 0
+
+    kept = lines[:max_results]
+    omitted = len(lines) - max_results
+    first = json.loads(kept[0])
+    location = first.get("location") or {}
+    path = location.get("path") or ".github/workflows/docs-quality.yml"
+    synthetic = {
+        "message": (
+            f"[docs-quality] review output truncated: omitted {omitted} finding(s). "
+            "See workflow logs for full diagnostics."
+        ),
+        "location": {"path": path, "range": {"start": {"line": 1, "column": 1}}},
+        "severity": "WARNING",
+    }
+    kept.append(json.dumps(synthetic, ensure_ascii=False))
+    return "\n".join(kept) + "\n", omitted
+
+
+def _run_reviewdog(
+    name: str,
+    stdin: str,
+    *,
+    rep: str,
+    extra_args: list[str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    cmd = [
+        "reviewdog",
+        "-f=rdjsonl",
+        f"-name={name}",
+        f"-reporter={rep}",
+        f"-fail-level={fail_level(rep)}",
+        f"-filter-mode={filter_mode(rep)}",
+        *(extra_args or []),
+    ]
+    return subprocess.run(cmd, input=stdin, text=True, capture_output=True, check=False)
+
+
 def rdjsonl(
     name: str,
     stdin: str,
@@ -44,16 +95,31 @@ def rdjsonl(
     if not stdin.strip():
         return
     rep = rep or reporter()
-    cmd = [
-        "reviewdog",
-        "-f=rdjsonl",
-        f"-name={name}",
-        f"-reporter={rep}",
-        f"-fail-level={fail_level(rep)}",
-        f"-filter-mode={filter_mode(rep)}",
-        *(extra_args or []),
-    ]
-    subprocess.run(cmd, input=stdin, text=True, check=False)
+    payload = stdin
+    if rep == "github-pr-review":
+        payload, omitted = _truncate_rdjsonl(stdin, max_results=_max_results())
+        if omitted:
+            print(
+                f"reviewdog: truncating PR review payload by {omitted} finding(s)",
+                file=sys.stderr,
+            )
+
+    proc = _run_reviewdog(name, payload, rep=rep, extra_args=extra_args)
+    if proc.stdout:
+        print(proc.stdout, end="")
+    if proc.stderr:
+        print(proc.stderr, end="", file=sys.stderr)
+
+    if proc.returncode != 0 and rep == "github-pr-review":
+        print(
+            "reviewdog: github-pr-review reporter failed; falling back to github-check",
+            file=sys.stderr,
+        )
+        fb = _run_reviewdog(name, payload, rep="github-check", extra_args=extra_args)
+        if fb.stdout:
+            print(fb.stdout, end="")
+        if fb.stderr:
+            print(fb.stderr, end="", file=sys.stderr)
 
 
 def report_docs_quality(log_dir: Path, rep: str | None = None) -> None:

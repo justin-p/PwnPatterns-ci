@@ -175,6 +175,23 @@ jobs:
           uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci report-reviewdog \
             "${GITHUB_WORKSPACE}/lint-logs" --reporter "${reporter}"
 
+      - name: Publish lint summary
+        if: steps.targets.outputs.skip != 'true'
+        run: |
+          {
+            echo "## Docs lint summary"
+            echo
+            for tool in vale typos textlint rumdl harper languagetool metadata prek; do
+              exit_f="${GITHUB_WORKSPACE}/lint-logs/${tool}.exit"
+              if [ -f "${exit_f}" ]; then
+                code="$(cat "${exit_f}")"
+                echo "- ${tool}: exit=${code}"
+              fi
+            done
+            echo
+            echo "See full diagnostics in job logs under \`lint-logs/\` output."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Fail on content linters
         if: steps.targets.outputs.skip != 'true'
         run: |
