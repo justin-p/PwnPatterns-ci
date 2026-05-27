@@ -30,6 +30,16 @@ def _repo_cwd() -> str:
     return os.environ.get("REPO_ROOT") or os.environ.get("GITHUB_WORKSPACE") or "."
 
 
+def _should_fallback_to_check(stderr: str) -> bool:
+    # Prefer exhausting PR review comments before creating check annotations.
+    raw = os.environ.get("REVIEWDOG_FALLBACK_TO_CHECK", "false").strip().lower()
+    if raw not in ("1", "true", "yes", "on"):
+        return False
+    if "Too many results (annotations) in diff." in stderr:
+        return False
+    return True
+
+
 def reporter() -> str:
     if os.environ.get("CI_REVIEWDOG_MODE") == "local" or not os.environ.get("GITHUB_ACTIONS"):
         return "local"
@@ -190,10 +200,14 @@ def rdjsonl(
         print(proc.stderr, end="", file=sys.stderr)
 
     if proc.returncode != 0 and rep == "github-pr-review":
-        print(
-            "reviewdog: github-pr-review reporter failed; falling back to github-check",
-            file=sys.stderr,
-        )
+        if not _should_fallback_to_check(proc.stderr or ""):
+            print(
+                "reviewdog: github-pr-review failed; skipping github-check fallback "
+                "(prefer PR comments, avoid duplicate annotations)",
+                file=sys.stderr,
+            )
+            return
+        print("reviewdog: github-pr-review reporter failed; falling back to github-check", file=sys.stderr)
         check_payload, check_omitted = _truncate_rdjsonl(payload, max_results=_max_results("github-check"))
         if check_omitted:
             print(
