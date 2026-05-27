@@ -124,7 +124,8 @@ jobs:
           paths_file="${GITHUB_WORKSPACE}/lint-logs/lint-paths.lst"
           uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci load-doc-paths \
             "${{ steps.targets.outputs.paths }}" > "${paths_file}"
-          export DOC_PATHS="$(cat "${paths_file}")"
+          DOC_PATHS="$(cat "${paths_file}")"
+          export DOC_PATHS
           uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci lint-prose "${GITHUB_WORKSPACE}/lint-logs"
 
       - name: Install reviewdog
