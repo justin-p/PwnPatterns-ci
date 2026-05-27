@@ -150,12 +150,7 @@ def run_e2e(
                 print("CI_E2E smoke-docs: no docs/*.md under repo root; skipping lint job.")
                 return
         else:
-            if os.environ.get("CI_E2E_REUSABLE") == "true":
-                # Reusable ci-e2e.yml: doc_targets would scan the full corpus on
-                # workflow_call; prose lint runs in docs-quality on PR/push instead.
-                print("CI_E2E: reusable workflow; skipping prose lint job.")
-                return
-            scan_mode, paths, skip = doc_targets(layout)
+            scan_mode, paths, skip = doc_targets(layout, config_only_full_scan=False)
             if skip and os.environ.get("CI_E2E_FULL_LINT") == "true":
                 paths = [layout.rel(p) for p in sorted((layout.repo_root / "docs").glob("**/*.md"))]
                 skip = False
@@ -179,7 +174,7 @@ def run_e2e(
         for tool in ("vale", "typos", "textlint", "rumdl", "harper", "languagetool"):
             exit_f = log_dir / f"{tool}.exit"
             results[tool] = int(exit_f.read_text(encoding="utf-8").strip()) if exit_f.is_file() else 0
-        scan_mode, _, _ = doc_targets(layout)
+        scan_mode, _, _ = doc_targets(layout, config_only_full_scan=False)
         meta_ec = verify_metadata(layout, log_dir, paths, scan_mode)
         results["metadata"] = meta_ec
         if os.environ.get("CI_E2E_SKIP_PREK", "true") == "true":

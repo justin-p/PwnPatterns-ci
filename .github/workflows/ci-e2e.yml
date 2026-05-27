@@ -60,7 +60,8 @@ jobs:
           CI_REVIEWDOG_MODE: local
           CI_E2E_SKIP_SYNC: "false"
           CI_E2E_SKIP_PREK: "true"
-          CI_E2E_REUSABLE: "true"
+          GITHUB_EVENT_PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          GITHUB_EVENT_PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
           DOC_LINT_INSTALL_DIR: /tmp/doc-linters
         run: |
           grep -vE '^\s*(#|$)' "${DOCS_QUALITY_DIR}/config/manifest.env" >> "${GITHUB_ENV}"
