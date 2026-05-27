@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import sys
 import shutil
 import subprocess
 import tarfile
@@ -125,8 +124,14 @@ def install_doc_linters(layout: Layout) -> None:
         v["HARPER_LINUX_AMD64_SHA256"],
         "harper-cli",
     )
-    _install_languagetool(install)
-    _install_textlint(layout)
+    try:
+        _install_languagetool(install)
+    except Exception as exc:
+        print(f"LanguageTool install skipped: {exc}", file=sys.stderr)
+    try:
+        _install_textlint(layout)
+    except Exception as exc:
+        print(f"textlint install skipped: {exc}", file=sys.stderr)
     _prepend_path(install)
 
 
