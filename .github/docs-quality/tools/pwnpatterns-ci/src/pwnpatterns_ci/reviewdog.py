@@ -7,6 +7,8 @@ import os
 import re
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from pwnpatterns_ci.rdjsonl.convert import report_docs_quality_combined
@@ -107,19 +109,7 @@ def _truncate_rdjsonl(stdin: str, *, max_results: int) -> tuple[str, int]:
     selected_set = set(selected)
     kept = [raw for i, raw in enumerate(lines) if i in selected_set][:max_results]
     omitted = len(lines) - max_results
-    first = json.loads(kept[0])
-    location = first.get("location") or {}
-    path = location.get("path") or ".github/workflows/docs-quality.yml"
-    synthetic = {
-        "message": (
-            f"[docs-quality] review output truncated: omitted {omitted} finding(s). "
-            "See workflow logs for full diagnostics."
-        ),
-        "location": {"path": path, "range": {"start": {"line": 1, "column": 1}}},
-        "severity": "WARNING",
-    }
-    kept.append(json.dumps(synthetic, ensure_ascii=False))
-    return "\n".join(kept) + "\n", omitted
+    return "\n".join(kept) + ("\n" if kept else ""), omitted
 
 
 def _run_reviewdog(
@@ -155,6 +145,181 @@ def _normalize_path(path: str) -> str:
     return path
 
 
+def _parse_rdjsonl_lines(stdin: str) -> list[dict]:
+    out: list[dict] = []
+    for line in stdin.splitlines():
+        raw = line.strip()
+        if not raw:
+            continue
+        try:
+            out.append(json.loads(raw))
+        except json.JSONDecodeError:
+            continue
+    return out
+
+
+def _tool_from_message(message: str) -> str:
+    m = re.match(r"^\[([^\]]+)\]", message or "")
+    return (m.group(1).lower() if m else "unknown")
+
+
+def _diagnostic_digest_line(diag: dict) -> str:
+    location = diag.get("location") or {}
+    path = location.get("path") or "?"
+    start = (location.get("range") or {}).get("start") or {}
+    line = start.get("line") or 1
+    column = start.get("column") or 1
+    message = str(diag.get("message") or "issue")
+    tool = _tool_from_message(message)
+    return f"- `{path}:{line}:{column}` **[{tool}]** {message}"
+
+
+def _format_overflow_digest(
+    diagnostics: list[dict],
+    *,
+    inline_shown: int,
+    omitted: int,
+    check_url: str | None,
+    workflow_url: str | None,
+) -> str:
+    lines = [
+        "## docs-quality findings digest",
+        "",
+        f"Posted **{inline_shown}** inline PR review comment(s). "
+        f"**{omitted}** additional finding(s) are listed below.",
+        "",
+    ]
+    if check_url:
+        lines.append(f"**Full report:** {check_url}")
+    if workflow_url:
+        lines.append(f"**Workflow run:** {workflow_url}")
+    lines.extend(["", "### All findings", ""])
+    for diag in diagnostics:
+        lines.append(_diagnostic_digest_line(diag))
+    return "\n".join(lines) + "\n"
+
+
+def _github_token() -> str | None:
+    return os.environ.get("REVIEWDOG_GITHUB_API_TOKEN") or os.environ.get("GITHUB_TOKEN")
+
+
+def _workflow_run_url() -> str | None:
+    server = (os.environ.get("GITHUB_SERVER_URL") or "https://github.com").rstrip("/")
+    repo = os.environ.get("GITHUB_REPOSITORY")
+    run_id = os.environ.get("GITHUB_RUN_ID")
+    if repo and run_id:
+        return f"{server}/{repo}/actions/runs/{run_id}"
+    return None
+
+
+def _github_api(method: str, path: str, payload: dict | None = None) -> dict | None:
+    token = _github_token()
+    repo = os.environ.get("GITHUB_REPOSITORY")
+    if not token or not repo:
+        return None
+    url = f"https://api.github.com/repos/{repo}/{path.lstrip('/')}"
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    req = urllib.request.Request(
+        url,
+        data=data,
+        method=method,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json",
+            "User-Agent": "PwnPatterns-ci/1.0",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            body = resp.read().decode("utf-8")
+            return json.loads(body) if body.strip() else {}
+    except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError, TimeoutError) as exc:
+        print(f"reviewdog: GitHub API {method} {path} failed: {exc}", file=sys.stderr)
+        return None
+
+
+def _resolve_pr_number() -> int | None:
+    raw = (os.environ.get("GITHUB_PR_NUMBER") or "").strip()
+    if raw.isdigit():
+        return int(raw)
+    proc = subprocess.run(
+        ["gh", "pr", "view", "--json", "number", "-q", ".number"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=_repo_cwd(),
+    )
+    if proc.returncode == 0 and proc.stdout.strip().isdigit():
+        return int(proc.stdout.strip())
+    return None
+
+
+def _create_summary_check_run(summary: str, *, name: str = "docs-quality") -> str | None:
+    sha = os.environ.get("GITHUB_SHA")
+    if not sha:
+        return None
+    if len(summary) > 65000:
+        summary = summary[:65000] + "\n\n… (truncated for GitHub check summary limit)"
+    resp = _github_api(
+        "POST",
+        "check-runs",
+        {
+            "name": name,
+            "head_sha": sha,
+            "status": "completed",
+            "conclusion": "failure",
+            "output": {
+                "title": "docs-quality findings digest",
+                "summary": summary,
+            },
+        },
+    )
+    if not resp:
+        return None
+    return resp.get("html_url") or resp.get("details_url")
+
+
+def _post_pr_issue_comment(body: str) -> bool:
+    pr = _resolve_pr_number()
+    if pr is None:
+        print("reviewdog: could not resolve PR number for overflow digest comment", file=sys.stderr)
+        return False
+    resp = _github_api("POST", f"issues/{pr}/comments", {"body": body})
+    return resp is not None
+
+
+def _publish_overflow_report(full_payload: str, *, inline_shown: int, omitted: int) -> None:
+    if omitted <= 0:
+        return
+    diagnostics = _parse_rdjsonl_lines(full_payload)
+    if not diagnostics:
+        return
+    workflow_url = _workflow_run_url()
+    digest = _format_overflow_digest(
+        diagnostics,
+        inline_shown=inline_shown,
+        omitted=omitted,
+        check_url=None,
+        workflow_url=workflow_url,
+    )
+    check_url = _create_summary_check_run(digest)
+    comment = _format_overflow_digest(
+        diagnostics,
+        inline_shown=inline_shown,
+        omitted=omitted,
+        check_url=check_url,
+        workflow_url=workflow_url,
+    )
+    if _post_pr_issue_comment(comment):
+        print(
+            f"reviewdog: posted overflow digest PR comment ({omitted} omitted finding(s))",
+            file=sys.stderr,
+        )
+    elif check_url:
+        print(f"reviewdog: overflow digest check run: {check_url}", file=sys.stderr)
+
+
 def _normalize_rdjsonl_paths(stdin: str) -> str:
     out: list[str] = []
     for line in stdin.splitlines():
@@ -185,8 +350,9 @@ def rdjsonl(
     if not stdin.strip():
         return
     rep = rep or reporter()
-    payload = _normalize_rdjsonl_paths(stdin)
-    payload, omitted = _truncate_rdjsonl(payload, max_results=_max_results(rep))
+    full_payload = _normalize_rdjsonl_paths(stdin)
+    payload, omitted = _truncate_rdjsonl(full_payload, max_results=_max_results(rep))
+    inline_shown = len([ln for ln in payload.splitlines() if ln.strip()])
     if omitted:
         print(
             f"reviewdog: truncating {rep} payload by {omitted} finding(s)",
@@ -198,6 +364,20 @@ def rdjsonl(
         print(proc.stdout, end="")
     if proc.stderr:
         print(proc.stderr, end="", file=sys.stderr)
+
+    overflow_omitted = omitted
+    if proc.returncode != 0 and rep == "github-pr-review":
+        stderr = proc.stderr or ""
+        if "Too many results" in stderr:
+            total = len(_parse_rdjsonl_lines(full_payload))
+            overflow_omitted = max(overflow_omitted, total - inline_shown)
+
+    if rep == "github-pr-review" and overflow_omitted > 0:
+        _publish_overflow_report(
+            full_payload,
+            inline_shown=inline_shown,
+            omitted=overflow_omitted,
+        )
 
     if proc.returncode != 0 and rep == "github-pr-review":
         if not _should_fallback_to_check(proc.stderr or ""):

@@ -170,6 +170,8 @@ jobs:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
           CI_LINT_LOG_DIR: ${{ github.workspace }}/lint-logs
           LINT_LOG_DIR: ${{ github.workspace }}/lint-logs
+          REPO_ROOT: ${{ github.workspace }}
+          GITHUB_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
         run: |
           reporter="${{ inputs.reviewdog_reporter }}"
           uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci report-reviewdog \
