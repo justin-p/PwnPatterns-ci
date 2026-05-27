@@ -62,12 +62,18 @@ def build_path_index(log_dir: Path, paths: list[str]) -> None:
     (log_dir / "path-index.json").write_text(json.dumps(index), encoding="utf-8")
 
 
-def route_grammar(layout: Layout, log_dir: Path) -> None:
+def route_grammar(layout: Layout, log_dir: Path, paths: list[str]) -> None:
     script = layout.docs_quality_dir / "tools" / "grammar-routing" / "route_grammar_paths.py"
     if script.is_file():
         subprocess.run(
             # route_grammar_paths.py requires --log-dir (positional arg would fail).
-            [sys.executable, str(script), "--log-dir", str(log_dir)],
+            [
+                sys.executable,
+                str(script),
+                "--log-dir",
+                str(log_dir),
+                *paths,
+            ],
             cwd=layout.repo_root,
             check=True,
             env=os.environ.copy(),
@@ -99,7 +105,7 @@ def lint_prose(layout: Layout, paths: list[str], log_dir: Path) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
     (log_dir / "lint-paths.lst").write_text("\n".join(paths) + "\n", encoding="utf-8")
     build_path_index(log_dir, paths)
-    route_grammar(layout, log_dir)
+    route_grammar(layout, log_dir, paths)
 
     install = os.environ.get("PATH", "")
     doc_bin = os.environ.get("DOC_LINT_INSTALL_DIR", "/tmp")
