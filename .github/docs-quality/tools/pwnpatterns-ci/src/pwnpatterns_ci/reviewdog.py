@@ -69,10 +69,13 @@ def _max_results(rep: str) -> int:
         return default
 
 
-def _truncate_rdjsonl(stdin: str, *, max_results: int) -> tuple[str, int]:
+def _split_rdjsonl_by_selection(
+    stdin: str, *, max_results: int
+) -> tuple[str, list[dict], list[dict], int]:
     lines = [ln for ln in stdin.splitlines() if ln.strip()]
     if len(lines) <= max_results:
-        return stdin, 0
+        diags = _parse_rdjsonl_lines(stdin)
+        return stdin, diags, [], 0
 
     # Keep at least one finding per tool (by message prefix) before filling
     # remaining slots in original order. This prevents one noisy tool from
@@ -106,10 +109,17 @@ def _truncate_rdjsonl(stdin: str, *, max_results: int) -> tuple[str, int]:
             if len(selected) >= max_results:
                 break
 
-    selected_set = set(selected)
-    kept = [raw for i, raw in enumerate(lines) if i in selected_set][:max_results]
+    selected_set = set(selected[:max_results])
+    kept = [raw for i, raw in enumerate(lines) if i in selected_set]
+    omitted_raw = [raw for i, raw in enumerate(lines) if i not in selected_set]
     omitted = len(lines) - max_results
-    return "\n".join(kept) + ("\n" if kept else ""), omitted
+    kept_payload = "\n".join(kept) + ("\n" if kept else "")
+    return kept_payload, _parse_rdjsonl_lines(kept_payload), _parse_rdjsonl_lines("\n".join(omitted_raw)), omitted
+
+
+def _truncate_rdjsonl(stdin: str, *, max_results: int) -> tuple[str, int]:
+    kept_payload, _, _, omitted = _split_rdjsonl_by_selection(stdin, max_results=max_results)
+    return kept_payload, omitted
 
 
 def _run_reviewdog(
@@ -186,16 +196,26 @@ def _format_overflow_digest(
         "## docs-quality findings digest",
         "",
         f"Posted **{inline_shown}** inline PR review comment(s). "
-        f"**{omitted}** additional finding(s) are listed below.",
+        f"**{omitted}** additional finding(s) could not be posted as PR comments due to rate limiting.",
         "",
     ]
     if check_url:
         lines.append(f"**Full report:** {check_url}")
     if workflow_url:
         lines.append(f"**Workflow run:** {workflow_url}")
-    lines.extend(["", "### All findings", ""])
+    lines.extend(
+        [
+            "",
+            "<details>",
+            "<summary>Remaining comments which cannot be posted as a review comment to avoid GitHub Rate Limit</summary>",
+            "",
+            "### All findings",
+            "",
+        ]
+    )
     for diag in diagnostics:
         lines.append(_diagnostic_digest_line(diag))
+    lines.extend(["", "</details>"])
     return "\n".join(lines) + "\n"
 
 
@@ -289,15 +309,14 @@ def _post_pr_issue_comment(body: str) -> bool:
     return resp is not None
 
 
-def _publish_overflow_report(full_payload: str, *, inline_shown: int, omitted: int) -> None:
+def _publish_overflow_report(omitted_diagnostics: list[dict], *, inline_shown: int, omitted: int) -> None:
     if omitted <= 0:
         return
-    diagnostics = _parse_rdjsonl_lines(full_payload)
-    if not diagnostics:
+    if not omitted_diagnostics:
         return
     workflow_url = _workflow_run_url()
     digest = _format_overflow_digest(
-        diagnostics,
+        omitted_diagnostics,
         inline_shown=inline_shown,
         omitted=omitted,
         check_url=None,
@@ -305,7 +324,7 @@ def _publish_overflow_report(full_payload: str, *, inline_shown: int, omitted: i
     )
     check_url = _create_summary_check_run(digest)
     comment = _format_overflow_digest(
-        diagnostics,
+        omitted_diagnostics,
         inline_shown=inline_shown,
         omitted=omitted,
         check_url=check_url,
@@ -351,7 +370,8 @@ def rdjsonl(
         return
     rep = rep or reporter()
     full_payload = _normalize_rdjsonl_paths(stdin)
-    payload, omitted = _truncate_rdjsonl(full_payload, max_results=_max_results(rep))
+    max_results = _max_results(rep)
+    payload, _, omitted_diags, omitted = _split_rdjsonl_by_selection(full_payload, max_results=max_results)
     inline_shown = len([ln for ln in payload.splitlines() if ln.strip()])
     if omitted:
         print(
@@ -366,15 +386,18 @@ def rdjsonl(
         print(proc.stderr, end="", file=sys.stderr)
 
     overflow_omitted = omitted
+    overflow_diags = omitted_diags
     if proc.returncode != 0 and rep == "github-pr-review":
         stderr = proc.stderr or ""
         if "Too many results" in stderr:
             total = len(_parse_rdjsonl_lines(full_payload))
             overflow_omitted = max(overflow_omitted, total - inline_shown)
+            if not overflow_diags:
+                overflow_diags = _parse_rdjsonl_lines(full_payload)[inline_shown:]
 
     if rep == "github-pr-review" and overflow_omitted > 0:
         _publish_overflow_report(
-            full_payload,
+            overflow_diags,
             inline_shown=inline_shown,
             omitted=overflow_omitted,
         )
