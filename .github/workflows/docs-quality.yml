@@ -8,6 +8,11 @@ on:
         description: justin-p/PwnPatterns-ci commit SHA (must match workflow uses pin)
         required: true
         type: string
+      reviewdog_reporter:
+        description: reviewdog reporter to use (e.g. github-pr-review, github-check, local)
+        required: false
+        type: string
+        default: github-check
     secrets:
       PWNPATTERNS_CI_CHECKOUT_TOKEN:
         description: Optional PAT for checkout when GITHUB_TOKEN cannot read the private platform repo
@@ -165,10 +170,29 @@ jobs:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
           CI_LINT_LOG_DIR: ${{ github.workspace }}/lint-logs
           LINT_LOG_DIR: ${{ github.workspace }}/lint-logs
+          REPO_ROOT: ${{ github.workspace }}
+          GITHUB_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
         run: |
-          reporter="${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-check' }}"
+          reporter="${{ inputs.reviewdog_reporter }}"
           uv run --directory "${PWNPATTERNS_CI_UV}" pwnpatterns-ci report-reviewdog \
             "${GITHUB_WORKSPACE}/lint-logs" --reporter "${reporter}"
+
+      - name: Publish lint summary
+        if: steps.targets.outputs.skip != 'true'
+        run: |
+          {
+            echo "## Docs lint summary"
+            echo
+            for tool in vale typos textlint rumdl harper languagetool metadata prek; do
+              exit_f="${GITHUB_WORKSPACE}/lint-logs/${tool}.exit"
+              if [ -f "${exit_f}" ]; then
+                code="$(cat "${exit_f}")"
+                echo "- ${tool}: exit=${code}"
+              fi
+            done
+            echo
+            echo "See full diagnostics in job logs under \`lint-logs/\` output."
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Fail on content linters
         if: steps.targets.outputs.skip != 'true'

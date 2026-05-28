@@ -7,10 +7,11 @@ from pathlib import Path
 
 import pytest
 
+from pwnpatterns_ci.paths_util import resolve_path
 from pwnpatterns_ci.rdjsonl.convert import prose_to_rdjsonl
 
 FIXTURES = (
-    Path(__file__).resolve().parents[3]
+    Path(__file__).resolve().parents[2]
     / "docs-dev"
     / "tests"
     / "fixtures"
@@ -44,3 +45,48 @@ def test_harper_resolves_path_index(log_dir: Path) -> None:
     lines = [json.loads(ln) for ln in out.splitlines() if ln.strip()]
     assert all(ln["location"]["path"].startswith("docs/") for ln in lines)
     assert any("InflectedVerbAfterTo" in ln["message"] for ln in lines)
+
+
+def test_languagetool_suggestion_range_matches_location(log_dir: Path) -> None:
+    sample = FIXTURES / "languagetool_sample.json"
+    if not sample.is_file():
+        pytest.skip("languagetool_sample.json missing")
+    (log_dir / "languagetool.json").write_text(sample.read_text(encoding="utf-8"), encoding="utf-8")
+    out = prose_to_rdjsonl("languagetool", log_dir)
+    lines = [json.loads(ln) for ln in out.splitlines() if ln.strip()]
+    assert lines
+    diag = lines[0]
+    assert diag["suggestions"]
+    assert diag["suggestions"][0]["range"] == diag["location"]["range"]
+
+
+def test_resolve_path_strips_platform_checkout_prefix() -> None:
+    path_index = {
+        "Protocollen_zonder_transportlaag_beveiliging.md": (
+            "docs/infra/general/Protocollen_zonder_transportlaag_beveiliging/"
+            "Protocollen_zonder_transportlaag_beveiliging.md"
+        )
+    }
+    raw = (
+        ".github/docs-quality/tools/pwnpatterns-ci/docs/infra/general/"
+        "Protocollen_zonder_transportlaag_beveiliging/"
+        "Protocollen_zonder_transportlaag_beveiliging.md"
+    )
+    got = resolve_path(raw, path_index, repo_root="")
+    assert got == path_index["Protocollen_zonder_transportlaag_beveiliging.md"]
+
+
+def test_resolve_path_strips_embedded_platform_checkout_prefix() -> None:
+    path_index = {
+        "Protocollen_zonder_transportlaag_beveiliging.md": (
+            "docs/infra/general/Protocollen_zonder_transportlaag_beveiliging/"
+            "Protocollen_zonder_transportlaag_beveiliging.md"
+        )
+    }
+    raw = (
+        "/home/runner/work/PwnPatterns-nl/PwnPatterns-nl/.github/pwnpatterns-ci/docs/infra/general/"
+        "Protocollen_zonder_transportlaag_beveiliging/"
+        "Protocollen_zonder_transportlaag_beveiliging.md"
+    )
+    got = resolve_path(raw, path_index, repo_root="")
+    assert got == path_index["Protocollen_zonder_transportlaag_beveiliging.md"]

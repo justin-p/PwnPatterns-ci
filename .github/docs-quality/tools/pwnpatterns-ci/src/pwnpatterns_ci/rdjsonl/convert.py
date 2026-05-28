@@ -177,18 +177,19 @@ def convert_languagetool(data: list, path_index: dict[str, str]) -> Iterator[str
             else:
                 sev = "WARNING"
             replacements = match.get("replacements") or []
+            loc_range = {
+                "start": {"line": line, "column": col},
+                "end": {"line": end_line, "column": end_col},
+            }
             suggestions: list[dict] = []
             if replacements and replacements[0].get("value"):
-                suggestions = [{"text": replacements[0]["value"]}]
+                suggestions = [{"range": loc_range, "text": replacements[0]["value"]}]
             yield _emit(
                 {
                     "message": msg.languagetool_message(match),
                     "location": {
                         "path": path,
-                        "range": {
-                            "start": {"line": line, "column": col},
-                            "end": {"line": end_line, "column": end_col},
-                        },
+                        "range": loc_range,
                     },
                     "suggestions": suggestions,
                     "severity": sev,
